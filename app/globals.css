@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('/fonts/IRANSansXFaNum-RegularD4.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('/fonts/IRANSansXFaNum-MediumD4.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('/fonts/IRANSansXFaNum-DemiBoldD4.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('/fonts/IRANSansXFaNum-BoldD4.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('/fonts/IRANSansXFaNum-BlackD4.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSansXFaNum';
+  src: url('/fonts/IRANSansXFaNum-ExtraBlackD4.woff2') format('woff2');
+  font-weight: 950;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --brand-accent: #58BDAF;
+  --brand-accent-deep: #347E75;
+  --brand-tint: #F2FAF9;
+  --brand-on-accent: #FFFFFF;
+  --shadow-color: #292827;
+}
+
+[data-brand="rokad"] {
+  --brand-accent: #58BDAF;
+  --brand-accent-deep: #347E75;
+  --brand-tint: #F2FAF9;
+  --brand-on-accent: #FFFFFF;
+}
+
+[data-brand="girl"] {
+  --brand-accent: #E0195B;
+  --brand-accent-deep: #CE1754;
+  --brand-tint: #FEFAFB;
+  --brand-on-accent: #FFFFFF;
+}
+
+[data-brand="boy"] {
+  --brand-accent: #21295A;
+  --brand-accent-deep: #202A5A;
+  --brand-tint: #F4F5FB;
+  --brand-on-accent: #FFFFFF;
+}
+
+[data-brand="third"] {
+  --brand-accent: #F8A41D;
+  --brand-accent-deep: #A56216;
+  --brand-tint: #FEF7EC;
+  --brand-on-accent: #292827;
+}
+
+body {
+  font-family: 'IRANSansXFaNum', 'IRANSansX', sans-serif;
+  direction: rtl;
+  background-color: #FFFFFF;
+  color: #292827;
+  overflow-x: hidden;
+}
+
+/* Custom Utilities */
+.leaf-card {
+  border-radius: 12px 0 12px 0;
+}
+
+.leaf-card-inverse {
+  border-radius: 0 12px 0 12px;
+}
+
+.elevated-sm {
+  box-shadow: -3px 3px 0 0 var(--shadow-color, #292827);
+}
+
+.elevated-md {
+  box-shadow: -4px 4px 0 0 var(--shadow-color, #292827);
+}
+
+.elevated-lg {
+  box-shadow: -6px 6px 0 0 var(--shadow-color, #292827);
+}
+
+.elevated-xl {
+  box-shadow: -8px 8px 0 0 var(--shadow-color, #292827);
+}
+
+.rotate-subtle-pos {
+  transform: rotate(1.5deg);
+}
+
+.rotate-subtle-neg {
+  transform: rotate(-1.5deg);
+}
+
+.rotate-default-pos {
+  transform: rotate(2.5deg);
+}
+
+.rotate-default-neg {
+  transform: rotate(-2.5deg);
+}
+
+@media (max-width: 768px) {
+  .rotate-subtle-pos,
+  .rotate-subtle-neg,
+  .rotate-default-pos,
+  .rotate-default-neg {
+    transform: rotate(0deg);
+  }
+}
