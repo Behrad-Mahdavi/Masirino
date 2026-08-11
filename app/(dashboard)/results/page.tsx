@@ -9,7 +9,8 @@ import { DiscProfileCard } from '@/components/results/DiscProfileCard';
 import { computePathDna, PathDnaProfile } from '@/lib/scoring/pathDna';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { Sparkles, Award, Target, Briefcase, ArrowRight, Share2, Printer } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { Briefcase, ArrowRight, Share2, Printer } from 'lucide-react';
 
 export default function ResultsPage() {
   const [hollandResult, setHollandResult] = useState<any>(null);
@@ -19,61 +20,103 @@ export default function ResultsPage() {
   const [pathDna, setPathDna] = useState<PathDnaProfile | null>(null);
 
   useEffect(() => {
-    // Read test results from localStorage or load realistic defaults for demonstration
-    const holland = JSON.parse(
-      localStorage.getItem('test_result_HOLLAND') ||
-        JSON.stringify({
-          scores: { R: 45, I: 78, A: 85, S: 90, E: 65, C: 50 },
-          normalizedScores: { R: 45, I: 78, A: 85, S: 90, E: 65, C: 50 },
-          code: 'SAE',
-          primaryDimension: 'S',
-        })
-    );
+    const fetchResults = async () => {
+      let holland = null;
+      let gardner = null;
+      let mbti = null;
+      let disc = null;
 
-    const gardner = JSON.parse(
-      localStorage.getItem('test_result_GARDNER') ||
-        JSON.stringify({
-          scores: {
-            linguistic: 4.2,
-            logical: 4.5,
-            spatial: 4.1,
-            bodily: 2.8,
-            musical: 3.0,
-            interpersonal: 4.6,
-            intrapersonal: 4.0,
-            naturalistic: 3.2,
-          },
-          topIntelligences: ['interpersonal', 'logical', 'linguistic'],
-          strongIntelligences: ['interpersonal', 'logical', 'linguistic', 'spatial', 'intrapersonal'],
-        })
-    );
+      try {
+        const supabase = createClient();
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
 
-    const mbti = JSON.parse(
-      localStorage.getItem('test_result_MBTI') ||
-        JSON.stringify({
-          type: 'ENFP',
-          certainty: { EI: 75, SN: 80, TF: 65, JP: 70 },
-          scores: {},
-        })
-    );
+        if (userId) {
+          const { data: results } = await supabase
+            .from('user_results')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('is_latest', true);
 
-    const disc = JSON.parse(
-      localStorage.getItem('test_result_DISC') ||
-        JSON.stringify({
-          scores: { D: 4, I: 7, S: 2, C: 3 },
-          profile: 'ID',
-          primaryDimension: 'I',
-          secondaryDimension: 'D',
-        })
-    );
+          if (results && results.length > 0) {
+            results.forEach((r) => {
+              if (r.test_id === 1) holland = r.final_output;
+              if (r.test_id === 2) gardner = r.final_output;
+              if (r.test_id === 3) mbti = r.final_output;
+              if (r.test_id === 4) disc = r.final_output;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase DB fetch warning:', err);
+      }
 
-    setHollandResult(holland);
-    setGardnerResult(gardner);
-    setMbtiResult(mbti);
-    setDiscResult(disc);
+      // Fallback to localStorage or mock defaults
+      if (!holland) {
+        holland = JSON.parse(
+          localStorage.getItem('test_result_HOLLAND') ||
+            JSON.stringify({
+              scores: { R: 45, I: 78, A: 85, S: 90, E: 65, C: 50 },
+              normalizedScores: { R: 45, I: 78, A: 85, S: 90, E: 65, C: 50 },
+              code: 'SAE',
+              primaryDimension: 'S',
+            })
+        );
+      }
 
-    const dna = computePathDna(holland, gardner, mbti, disc);
-    setPathDna(dna);
+      if (!gardner) {
+        gardner = JSON.parse(
+          localStorage.getItem('test_result_GARDNER') ||
+            JSON.stringify({
+              scores: {
+                linguistic: 4.2,
+                logical: 4.5,
+                spatial: 4.1,
+                bodily: 2.8,
+                musical: 3.0,
+                interpersonal: 4.6,
+                intrapersonal: 4.0,
+                naturalistic: 3.2,
+              },
+              topIntelligences: ['interpersonal', 'logical', 'linguistic'],
+              strongIntelligences: ['interpersonal', 'logical', 'linguistic', 'spatial', 'intrapersonal'],
+            })
+        );
+      }
+
+      if (!mbti) {
+        mbti = JSON.parse(
+          localStorage.getItem('test_result_MBTI') ||
+            JSON.stringify({
+              type: 'ENFP',
+              certainty: { EI: 75, SN: 80, TF: 65, JP: 70 },
+              scores: {},
+            })
+        );
+      }
+
+      if (!disc) {
+        disc = JSON.parse(
+          localStorage.getItem('test_result_DISC') ||
+            JSON.stringify({
+              scores: { D: 4, I: 7, S: 2, C: 3 },
+              profile: 'ID',
+              primaryDimension: 'I',
+              secondaryDimension: 'D',
+            })
+        );
+      }
+
+      setHollandResult(holland);
+      setGardnerResult(gardner);
+      setMbtiResult(mbti);
+      setDiscResult(disc);
+
+      const dna = computePathDna(holland, gardner, mbti, disc);
+      setPathDna(dna);
+    };
+
+    fetchResults();
   }, []);
 
   return (

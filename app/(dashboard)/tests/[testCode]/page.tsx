@@ -18,7 +18,9 @@ import { scoreHolland } from '@/lib/scoring/holland';
 import { scoreGardner } from '@/lib/scoring/gardner';
 import { scoreMbti } from '@/lib/scoring/mbti';
 import { scoreDisc } from '@/lib/scoring/disc';
-import { ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { computePathDna } from '@/lib/scoring/pathDna';
+import { createClient } from '@/lib/supabase/client';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function TestRunnerPage() {
   const params = useParams();
@@ -78,44 +80,101 @@ export default function TestRunnerPage() {
     }));
   };
 
-  const handleSubmit = () => {
+  const saveToSupabase = async (code: string, calculatedResult: any) => {
+    try {
+      const supabase = createClient();
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+
+      if (!userId) return;
+
+      const testIdMap: Record<string, number> = {
+        HOLLAND: 1,
+        GARDNER: 2,
+        MBTI: 3,
+        DISC: 4,
+      };
+
+      // 1. Insert into user_results table
+      await supabase.from('user_results').insert({
+        user_id: userId,
+        test_id: testIdMap[code],
+        dimension_scores: calculatedResult.scores || calculatedResult.normalizedScores || {},
+        certainty_scores: calculatedResult.certaintyScores || null,
+        final_output: calculatedResult,
+        is_latest: true,
+      });
+
+      // 2. Synthesize & Upsert Path DNA
+      const holland = code === 'HOLLAND' ? calculatedResult : JSON.parse(localStorage.getItem('test_result_HOLLAND') || '{}');
+      const gardner = code === 'GARDNER' ? calculatedResult : JSON.parse(localStorage.getItem('test_result_GARDNER') || '{}');
+      const mbti = code === 'MBTI' ? calculatedResult : JSON.parse(localStorage.getItem('test_result_MBTI') || '{}');
+      const disc = code === 'DISC' ? calculatedResult : JSON.parse(localStorage.getItem('test_result_DISC') || '{}');
+
+      const dna = computePathDna(
+        Object.keys(holland).length ? holland : null,
+        Object.keys(gardner).length ? gardner : null,
+        Object.keys(mbti).length ? mbti : null,
+        Object.keys(disc).length ? disc : null
+      );
+
+      await supabase.from('path_dna').upsert({
+        user_id: userId,
+        holland_code: dna.hollandCode,
+        top_intelligences: dna.topIntelligences,
+        mbti_type: dna.mbtiType,
+        disc_profile: dna.discProfile,
+        career_clusters: dna.careerClusters,
+        computed_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+    } catch (err) {
+      console.warn('Supabase DB save warning:', err);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!isComplete) return;
     setSubmitting(true);
+
+    let calculatedResult: any = null;
 
     if (testCode === 'HOLLAND') {
       const responses = HOLLAND_QUESTIONS.map((q) => ({
         dimension: q.dimension as any,
         value: likertAnswers[q.id] || 3,
       }));
-      const result = scoreHolland(responses);
-      localStorage.setItem('test_result_HOLLAND', JSON.stringify(result));
+      calculatedResult = scoreHolland(responses);
+      localStorage.setItem('test_result_HOLLAND', JSON.stringify(calculatedResult));
     } else if (testCode === 'GARDNER') {
       const responses = GARDNER_QUESTIONS.map((q) => ({
         dimension: q.dimension,
         value: likertAnswers[q.id] || 3,
       }));
-      const result = scoreGardner(responses);
-      localStorage.setItem('test_result_GARDNER', JSON.stringify(result));
+      calculatedResult = scoreGardner(responses);
+      localStorage.setItem('test_result_GARDNER', JSON.stringify(calculatedResult));
     } else if (testCode === 'MBTI') {
       const responses = MBTI_QUESTIONS.map((q) => ({
         axis: q.axis,
         value: likertAnswers[q.id] || 3,
       }));
-      const result = scoreMbti(responses);
-      localStorage.setItem('test_result_MBTI', JSON.stringify(result));
+      calculatedResult = scoreMbti(responses);
+      localStorage.setItem('test_result_MBTI', JSON.stringify(calculatedResult));
     } else if (testCode === 'DISC') {
       const blocks = DISC_BLOCKS.map((b) => ({
         most: discAnswers[b.id]?.most || 'D',
         least: discAnswers[b.id]?.least || 'C',
       }));
-      const result = scoreDisc(blocks);
-      localStorage.setItem('test_result_DISC', JSON.stringify(result));
+      calculatedResult = scoreDisc(blocks);
+      localStorage.setItem('test_result_DISC', JSON.stringify(calculatedResult));
     }
 
-    setTimeout(() => {
-      setSubmitting(false);
-      router.push('/dashboard');
-    }, 500);
+    if (calculatedResult) {
+      await saveToSupabase(testCode, calculatedResult);
+    }
+
+    setSubmitting(false);
+    router.push('/dashboard');
   };
 
   return (
@@ -125,7 +184,7 @@ export default function TestRunnerPage() {
         <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-ink-500 hover:text-teal-700">
           <ArrowRight className="w-4 h-4" /> بازگشت به داشبورد
         </Link>
-        <span className="text-xs font-bold text-ink-500">حالت ذخیره‌سازی خودکار آنی</span>
+        <span className="text-xs font-bold text-ink-500">ذخیره‌سازی هوشمند در Supabase</span>
       </div>
 
       {/* Progress Bar */}
@@ -197,7 +256,7 @@ export default function TestRunnerPage() {
           onClick={handleSubmit}
           icon={<CheckCircle2 className="w-5 h-5" />}
         >
-          ثبت و محاسبه نتیجه آزمون
+          ثبت و ذخیره در دیتابیس
         </Button>
       </div>
     </div>
