@@ -270,12 +270,27 @@ export function runPathEngine(
     buildRecommendation(item.path, item.matchScore, baseCluster, gardner, mbti, disc)
   );
 
-  // Complementary Paths: Interdisciplinary / Different academic track family
+  // Complementary Paths: Creative and Combined (Interdisciplinary) or next best paths.
+  // We no longer force them to be from a completely different academic family (!pathMatchesBaseCluster),
+  // as that resulted in disastrously low-scoring irrelevant recommendations.
+  // Instead, we pick the highest scoring remaining paths, slightly boosting interdisciplinary ones.
   const chosenIds = new Set([mainPathItem.path.id, ...altItems.map((i) => i.path.id)]);
+
+  const isInterdisciplinary = (p: PathDefinition) => {
+    // Count how many distinct main academic groups this path belongs to
+    const mainGroupsCount = p.compatibleTracks.filter(t => Object.values(MainGroups).includes(t as MainGroups)).length;
+    return mainGroupsCount > 1;
+  };
 
   const compCandidates = eligible
     .slice(1)
-    .filter((item) => !chosenIds.has(item.path.id) && !pathMatchesBaseCluster(item.path));
+    .filter((item) => !chosenIds.has(item.path.id))
+    .sort((a, b) => {
+      // Give a slight edge to interdisciplinary (creative/combined) paths
+      const aBonus = isInterdisciplinary(a.path) ? 5 : 0;
+      const bBonus = isInterdisciplinary(b.path) ? 5 : 0;
+      return (b.matchScore + bBonus) - (a.matchScore + aBonus);
+    });
 
   const compItems = compCandidates.slice(0, 3);
 
