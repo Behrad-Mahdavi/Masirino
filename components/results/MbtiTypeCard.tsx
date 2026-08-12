@@ -18,10 +18,10 @@ export const MbtiTypeCard: React.FC<MbtiTypeCardProps> = ({
   };
 
   const axesList = [
-    { key: 'EI', label: 'جهت‌گیری انرژی', first: 'E (برون‌گرا)', second: 'I (درون‌گرا)' },
-    { key: 'SN', label: 'نوع ادراک', first: 'S (حسی)', second: 'N (شهودی)' },
-    { key: 'TF', label: 'تصمیم‌گیری', first: 'T (فکری)', second: 'F (احساسی)' },
-    { key: 'JP', label: 'سبک زندگی', first: 'J (قضاوتی)', second: 'P (ادراکی)' },
+    { key: 'EI', label: 'جهت‌گیری انرژی', firstLetter: 'E', secondLetter: 'I', first: 'E (برون‌گرا)', second: 'I (درون‌گرا)' },
+    { key: 'SN', label: 'نوع ادراک', firstLetter: 'S', secondLetter: 'N', first: 'S (حسی)', second: 'N (شهودی)' },
+    { key: 'TF', label: 'تصمیم‌گیری', firstLetter: 'T', secondLetter: 'F', first: 'T (فکری)', second: 'F (احساسی)' },
+    { key: 'JP', label: 'سبک زندگی', firstLetter: 'J', secondLetter: 'P', first: 'J (قضاوتی)', second: 'P (ادراکی)' },
   ];
 
   return (
@@ -46,11 +46,31 @@ export const MbtiTypeCard: React.FC<MbtiTypeCardProps> = ({
 
       {/* Axis certainty breakdown */}
       <div className="flex flex-col gap-3.5">
-        {axesList.map((axis) => {
+        {axesList.map((axis, idx) => {
           const detail = certaintyScores?.[axis.key];
-          const pole1Pct = detail ? detail.pole1Pct : 50;
-          const pole2Pct = detail ? detail.pole2Pct : 50;
-          const isNeutral = detail ? detail.isNeutral : certainty[axis.key] === 0;
+          let pole1Pct = 50;
+          let pole2Pct = 50;
+          let isNeutral = false;
+
+          if (detail) {
+            pole1Pct = detail.pole1Pct;
+            pole2Pct = detail.pole2Pct;
+            isNeutral = detail.isNeutral;
+          } else {
+            const letterAtAxis = type[idx] || 'X';
+            const intensity = certainty?.[axis.key] ?? 50;
+            if (letterAtAxis === 'X' || intensity === 0) {
+              isNeutral = true;
+              pole1Pct = 50;
+              pole2Pct = 50;
+            } else {
+              const domPct = 50 + Math.round(intensity / 2);
+              const subPct = 100 - domPct;
+              const isPole1 = letterAtAxis === axis.firstLetter;
+              pole1Pct = isPole1 ? domPct : subPct;
+              pole2Pct = isPole1 ? subPct : domPct;
+            }
+          }
 
           return (
             <div key={axis.key} className="bg-neutral-50 p-3.5 rounded-lg border border-neutral-300 space-y-2">

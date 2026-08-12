@@ -101,6 +101,12 @@ export default function ResultsPage() {
             JSON.stringify({
               type: 'ENFP',
               certainty: { EI: 75, SN: 80, TF: 65, JP: 70 },
+              certaintyScores: {
+                EI: { dominantLetter: 'E', intensityPct: 75, pole1Pct: 88, pole2Pct: 12, isNeutral: false },
+                SN: { dominantLetter: 'N', intensityPct: 80, pole1Pct: 10, pole2Pct: 90, isNeutral: false },
+                TF: { dominantLetter: 'F', intensityPct: 65, pole1Pct: 18, pole2Pct: 82, isNeutral: false },
+                JP: { dominantLetter: 'P', intensityPct: 70, pole1Pct: 15, pole2Pct: 85, isNeutral: false },
+              },
               scores: {},
             })
         );
@@ -363,7 +369,13 @@ export default function ResultsPage() {
           {gardnerResult && (
             <GardnerChart scores={gardnerResult.scores} topIntelligences={gardnerResult.topIntelligences} />
           )}
-          {mbtiResult && <MbtiTypeCard type={mbtiResult.type} certainty={mbtiResult.certainty} />}
+          {mbtiResult && (
+            <MbtiTypeCard
+              type={mbtiResult.type}
+              certainty={mbtiResult.certainty}
+              certaintyScores={mbtiResult.certaintyScores}
+            />
+          )}
           {discResult && <DiscProfileCard profile={discResult.profile} scores={discResult.scores} />}
         </div>
       </div>
