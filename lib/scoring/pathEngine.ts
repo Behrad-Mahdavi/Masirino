@@ -93,7 +93,7 @@ export function runPathEngine(
 
   // Baseline scale when Gardner is omitted vs present
   const BASELINE_GARDNER_SCORE = 100;
-  const MAX_THEORETICAL_SCORE = hasGardnerData ? 315 : 150; // 210 * 1.5 vs 100 * 1.5
+  const MAX_THEORETICAL_SCORE = hasGardnerData ? 220 : 120;
 
   const stage2Scored = PATH_DATABASE.map((path) => {
     let gardnerScore = BASELINE_GARDNER_SCORE;
@@ -105,7 +105,8 @@ export function runPathEngine(
       gardner.topIntelligences.slice(0, 3).forEach((intel, idx) => {
         const weight = rankWeights[idx] || 0.3;
         const pathIntelWeight = path.gardnerWeights[intel] || 0;
-        gardnerScore += weight * pathIntelWeight * 100;
+        const userIntelScore = gardner.scores?.[intel] !== undefined ? gardner.scores[intel] / 5.0 : 1.0;
+        gardnerScore += weight * pathIntelWeight * userIntelScore * 100;
       });
     }
 

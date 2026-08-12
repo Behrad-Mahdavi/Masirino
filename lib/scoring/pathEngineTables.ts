@@ -54,7 +54,7 @@ export const MAIN_GROUPS_VECTORS: Record<string, RiasecVector> = {
   [MainGroups.EXPERIMENTAL_SCIENCE]: { R: 35, I: 90, A: 15, S: 50, E: 20, C: 65 },
   [MainGroups.HUMANITIES]: { R: 10, I: 60, A: 55, S: 85, E: 45, C: 40 },
   [MainGroups.TVET_INDUSTRY]: { R: 82, I: 52, A: 16, S: 13, E: 19, C: 55 },
-  [MainGroups.TVET_ARTS]: { R: 32, I: 29, A: 89, S: 29, E: 30, C: 31 },
+  [MainGroups.TVET_ARTS]: { R: 25, I: 50, A: 95, S: 50, E: 30, C: 30 },
 };
 
 export const TVET_INDUSTRY_SUBFIELDS: Record<string, RiasecVector> = {
@@ -199,7 +199,7 @@ export const PATH_DATABASE: PathDefinition[] = [
     title: 'پزشکی عمومی و تخصص‌های بالینی',
     category: 'علوم پزشکی و سلامت',
     description: 'تشخیص، درمان و مراقبت از سلامت بیماران بر پایه علمی دانش زیست‌شناسی و همدلی انسانی.',
-    gardnerWeights: { logical: 0.7, interpersonal: 0.6, naturalistic: 0.5 },
+    gardnerWeights: { logical: 0.9, interpersonal: 0.8, naturalistic: 0.7 },
     compatibleTracks: [MainGroups.EXPERIMENTAL_SCIENCE],
     behavioralVector: { structure: 90, social: 85, autonomy: 60, pace: 75, analytical_vs_valuebased: 55, competitiveness: 75 },
     recommendedHighschoolTrack: 'علوم تجربی',
