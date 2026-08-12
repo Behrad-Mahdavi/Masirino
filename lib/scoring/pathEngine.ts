@@ -26,7 +26,7 @@ export interface PathRecommendation {
   title: string;
   category: string;
   description: string;
-  matchScore: number; // 0 to 100
+  matchScore: number; // 0 to 100 (Absolute & Honest)
   recommendedHighschoolTrack: string;
   universityMajors: string[];
   exampleCareers: string[];
@@ -35,7 +35,7 @@ export interface PathRecommendation {
 
 export interface BaseClusterResult {
   mainGroup: string[]; // e.g. ["علوم تجربی"] or ["علوم تجربی", "ادبیات و علوم‌انسانی"]
-  topSubfields: string[]; // empty if theoretical, or e.g. ["شبکه و نرم‌افزار رایانه"]
+  topSubfields: string[]; // empty if theoretical, or e.g. ["تأسیسات مکانیکی"]
 }
 
 export interface PathEngineOutput {
@@ -43,9 +43,9 @@ export interface PathEngineOutput {
   completedTestsCount: number;
   baseCluster: BaseClusterResult;
   mainPath: PathRecommendation;
-  alternativePaths: PathRecommendation[]; // 3 paths in same academic family
-  complementaryPaths: PathRecommendation[]; // 3 interdisciplinary / different family paths
-  allRecommendedPaths: PathRecommendation[]; // All 7 paths combined
+  alternativePaths: PathRecommendation[]; // 1 to 3 paths strictly in same academic base cluster
+  complementaryPaths: PathRecommendation[]; // 1 to 3 interdisciplinary / different family paths
+  allRecommendedPaths: PathRecommendation[];
   computedAt: string;
 }
 
@@ -85,12 +85,14 @@ export function runPathEngine(
   const baseCluster = calculateBaseCluster(userRiasec);
 
   // ---------------------------------------------------------
-  // Stage 2: Initial Path Scoring with Gardner & Alignment Bonus
+  // Stage 2: Initial Path Scoring & Gardner Pruning Filter (gardnerScore > 0)
   // ---------------------------------------------------------
+  const hasGardnerData = gardner && gardner.topIntelligences && gardner.topIntelligences.length > 0;
+
   const stage2Scored = PATH_DATABASE.map((path) => {
     let gardnerScore = 10;
 
-    if (gardner && gardner.topIntelligences && gardner.topIntelligences.length > 0) {
+    if (hasGardnerData) {
       const rankWeights = [1.0, 0.7, 0.4];
       gardnerScore = 0;
 
@@ -112,19 +114,24 @@ export function runPathEngine(
     const hasMainGroupMatch = baseCluster.mainGroup.some((grp) => pathTracks.includes(grp));
 
     if (hasSubfieldMatch) {
-      alignmentBonus = 1.5; // +50% bonus
+      alignmentBonus = 1.5; // +50% bonus for exact leaf match
     } else if (hasMainGroupMatch) {
-      alignmentBonus = 1.3; // +30% bonus
+      alignmentBonus = 1.3; // +30% bonus for main track match
     }
 
     const stage2Score = gardnerScore * alignmentBonus;
-    return { path, stage2Score, alignmentBonus };
+    return { path, gardnerScore, stage2Score, alignmentBonus };
   });
+
+  // Issue 🔴 1 Fix: Filter initial candidate pool to paths where gardnerScore > 0 (Section 2, Stage 2)
+  const candidatePool = hasGardnerData
+    ? stage2Scored.filter((item) => item.gardnerScore > 0)
+    : stage2Scored;
 
   // ---------------------------------------------------------
   // Stage 3: MBTI Multiplicative Personality Filter
   // ---------------------------------------------------------
-  const stage3Scored = stage2Scored.map(({ path, stage2Score, alignmentBonus }) => {
+  const stage3Scored = candidatePool.map(({ path, gardnerScore, stage2Score, alignmentBonus }) => {
     let mbtiMultiplier = 1.0;
 
     if (mbti && mbti.type && mbti.certaintyScores) {
@@ -157,55 +164,62 @@ export function runPathEngine(
     }
 
     const stage3Score = stage2Score * mbtiMultiplier;
-    return { path, stage3Score, mbtiMultiplier, alignmentBonus };
+    return { path, gardnerScore, stage3Score, mbtiMultiplier, alignmentBonus };
   });
 
   // ---------------------------------------------------------
-  // Stage 4: DISC Multiplicative Behavioral Filter & Final Score
+  // Stage 4: DISC Multiplicative Behavioral Filter & Absolute Scoring
   // ---------------------------------------------------------
-  const stage4Scored = stage3Scored.map(({ path, stage3Score, mbtiMultiplier, alignmentBonus }) => {
-    let discMultiplier = 1.0;
+  const stage4Scored = stage3Scored.map(
+    ({ path, gardnerScore, stage3Score, mbtiMultiplier, alignmentBonus }) => {
+      let discMultiplier = 1.0;
 
-    if (disc && disc.profile) {
-      const dimensions = disc.profile.split(''); // e.g. ['I', 'D'] or ['D']
-      let totalMult = 0;
+      if (disc && disc.profile) {
+        const dimensions = disc.profile.split(''); // e.g. ['I', 'D'] or ['D']
+        let totalMult = 0;
 
-      dimensions.forEach((dim) => {
-        const targets = DISC_BEHAVIORAL_TARGETS[dim];
-        if (targets && targets.length > 0) {
-          let dimCompSum = 0;
-          targets.forEach((t) => {
-            const actualVal = path.behavioralVector[t.dimension];
-            const dist = Math.abs(actualVal - t.target) / 100;
-            dimCompSum += 1 - dist;
-          });
-          totalMult += dimCompSum / targets.length;
-        } else {
-          totalMult += 1.0;
-        }
-      });
+        dimensions.forEach((dim) => {
+          const targets = DISC_BEHAVIORAL_TARGETS[dim];
+          if (targets && targets.length > 0) {
+            let dimCompSum = 0;
+            targets.forEach((t) => {
+              const actualVal = path.behavioralVector[t.dimension];
+              const dist = Math.abs(actualVal - t.target) / 100;
+              dimCompSum += 1 - dist;
+            });
+            totalMult += dimCompSum / targets.length;
+          } else {
+            totalMult += 1.0;
+          }
+        });
 
-      discMultiplier = Math.max(0.2, totalMult / dimensions.length);
+        discMultiplier = Math.max(0.2, totalMult / dimensions.length);
+      }
+
+      const rawFinalScore = stage3Score * discMultiplier;
+      return { path, rawFinalScore, gardnerScore, mbtiMultiplier, discMultiplier, alignmentBonus };
     }
+  );
 
-    const rawFinalScore = stage3Score * discMultiplier;
-    return { path, rawFinalScore, mbtiMultiplier, discMultiplier, alignmentBonus };
-  });
+  // Issue 🔴 3 & 🔴 2 Fix: Calculate Absolute Score against theoretical max (without artificial max(50, ...))
+  // Theoretical max = maxGardner (210) * maxAlignment (1.5) * maxMbti (1.0) * maxDisc (1.0) = 315
+  const MAX_THEORETICAL_SCORE = 315;
 
-  // Normalize final scores to 0-100
-  const maxRawScore = Math.max(...stage4Scored.map((s) => s.rawFinalScore), 1);
-  const normalizedPaths = stage4Scored.map((item) => {
-    const matchScore = Math.min(99, Math.max(50, Math.round((item.rawFinalScore / maxRawScore) * 100)));
+  const absoluteScoredPaths = stage4Scored.map((item) => {
+    const rawPct = (item.rawFinalScore / MAX_THEORETICAL_SCORE) * 100;
+    const matchScore = Math.min(99, Math.max(10, Math.round(rawPct)));
     return { ...item, matchScore };
   });
 
   // Sort descending by matchScore
-  normalizedPaths.sort((a, b) => b.matchScore - a.matchScore);
+  absoluteScoredPaths.sort((a, b) => b.matchScore - a.matchScore);
 
-  // Apply Stage 4.4 Minimum Threshold (relax if fewer than 7 paths remain)
-  let eligible = normalizedPaths.filter((p) => p.matchScore >= 55);
+  // Issue 🔴 2 Fix: Apply true final threshold (Section 4.4)
+  const MIN_FINAL_THRESHOLD = 25; // Absolute score threshold
+  let eligible = absoluteScoredPaths.filter((p) => p.matchScore >= MIN_FINAL_THRESHOLD);
+
   if (eligible.length < 7) {
-    eligible = normalizedPaths; // Relax threshold to ensure full 7 paths output
+    eligible = absoluteScoredPaths; // Relax threshold temporarily if total paths below 7
   }
 
   // ---------------------------------------------------------
@@ -222,34 +236,30 @@ export function runPathEngine(
     disc
   );
 
-  const mainBaseGroup = baseCluster.mainGroup[0];
+  // Issue 🟡 5 Fix: Check ALL groups in mainGroup and topSubfields for hybrid base clusters
+  const pathMatchesBaseCluster = (p: PathDefinition) => {
+    const hasMainGroupOverlap = baseCluster.mainGroup.some((grp) => p.compatibleTracks.includes(grp));
+    const hasSubfieldOverlap =
+      baseCluster.topSubfields.length > 0 &&
+      baseCluster.topSubfields.some((sub) => p.compatibleTracks.includes(sub));
+    return hasMainGroupOverlap || hasSubfieldOverlap;
+  };
 
-  // Helper to check if a path matches the main academic group
-  const matchesMainGroup = (p: PathDefinition) => p.compatibleTracks.includes(mainBaseGroup);
-
-  // 3 Alternative Paths: Same academic family
-  const alternativePool = eligible.slice(1).filter((item) => matchesMainGroup(item.path));
+  // Issue 🔴 4 Fix: Strictly filter Alternative Paths to paths matching the base cluster
+  const alternativePool = eligible.slice(1).filter((item) => pathMatchesBaseCluster(item.path));
   const altItems = alternativePool.slice(0, 3);
-
-  // Fallback if alternative pool has fewer than 3
-  if (altItems.length < 3) {
-    const remaining = eligible.slice(1).filter((item) => !altItems.includes(item));
-    while (altItems.length < 3 && remaining.length > 0) {
-      altItems.push(remaining.shift()!);
-    }
-  }
 
   const alternativePaths = altItems.map((item) =>
     buildRecommendation(item.path, item.matchScore, baseCluster, gardner, mbti, disc)
   );
 
-  // 3 Complementary Paths: Interdisciplinary / Different academic track family
+  // Complementary Paths: Paths with DIFFERENT base cluster / interdisciplinary tracks
   const complementaryPool = eligible.slice(1).filter(
-    (item) => !altItems.includes(item) && !matchesMainGroup(item.path)
+    (item) => !altItems.includes(item) && !pathMatchesBaseCluster(item.path)
   );
   const compItems = complementaryPool.slice(0, 3);
 
-  // Fallback if complementary pool has fewer than 3
+  // Fallback for complementary paths if fewer than 3 interdisciplinary paths exist
   if (compItems.length < 3) {
     const remainingComp = eligible
       .slice(1)
@@ -366,18 +376,21 @@ function buildRecommendation(
   disc: DiscResult | null
 ): PathRecommendation {
   const mainGroupStr = baseCluster.mainGroup.join(' و ');
-  const subfieldStr = baseCluster.topSubfields.length > 0 ? ` (زیررشته‌های ${baseCluster.topSubfields.join('، ')})` : '';
+  const subfieldStr =
+    baseCluster.topSubfields.length > 0 ? ` (زیررشته‌های ${baseCluster.topSubfields.join('، ')})` : '';
 
   const hollandReasoning = `این مسیر با خوشه‌ی پایه تحصیلی شما در گروه ${mainGroupStr}${subfieldStr} هم‌راستایی کامل دارد.`;
 
-  const topGardnerStr = gardner?.topIntelligences ? gardner.topIntelligences.slice(0, 2).join(' و ') : 'هوش‌های برتر تحلیلی';
+  const topGardnerStr = gardner?.topIntelligences
+    ? gardner.topIntelligences.slice(0, 2).join(' و ')
+    : 'هوش‌های تحلیلی و عمومی';
   const gardnerReasoning = `توانمندی‌های روانی شما در حوزه ${topGardnerStr} پشتیبان اصلی موفقیت در این حوزه تخصصی است.`;
 
   const mbtiTypeStr = mbti?.type || 'متوازن';
   const mbtiReasoning = `سبک شخصیتی ${mbtiTypeStr} شما با میزان ساختار و پویایی محیطی این شغل هم‌خوانی بالا دارد.`;
 
   const discProfileStr = disc?.profile || 'متعادل';
-  const discReasoning = `پروفایل رفتاری ${discProfileStr} الگوهای تعاملی و تصمیم‌گیری مورد نیاز این مسیر را به خوبی برآورده می‌سازد.`;
+  const discReasoning = `پروفایل رفتاری ${discProfileStr} الگوهای تعاملی و تصمیم‌گیری مورد نیاز این مسیر را برآورده می‌سازد.`;
 
   return {
     pathId: path.id,
