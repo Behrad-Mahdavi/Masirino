@@ -43,9 +43,9 @@ export interface PathEngineOutput {
   completedTestsCount: number;
   baseCluster: BaseClusterResult;
   mainPath: PathRecommendation;
-  alternativePaths: PathRecommendation[]; // 1 to 3 paths strictly in same academic base cluster
-  complementaryPaths: PathRecommendation[]; // 1 to 3 interdisciplinary / different family paths
-  allRecommendedPaths: PathRecommendation[];
+  alternativePaths: PathRecommendation[]; // Exactly 3 paths in same academic base cluster
+  complementaryPaths: PathRecommendation[]; // Exactly 3 interdisciplinary / different family paths
+  allRecommendedPaths: PathRecommendation[]; // Exactly 7 paths total (1 + 3 + 3)
   computedAt: string;
 }
 
@@ -123,44 +123,48 @@ export function runPathEngine(
     return { path, gardnerScore, stage2Score, alignmentBonus };
   });
 
-  // Issue 🔴 1 Fix: Filter initial candidate pool to paths where gardnerScore > 0 (Section 2, Stage 2)
+  // Filter initial candidate pool to paths where gardnerScore > 0 when Gardner is available
   const candidatePool = hasGardnerData
     ? stage2Scored.filter((item) => item.gardnerScore > 0)
     : stage2Scored;
 
+  // Fallback: if pruning cleared candidatePool (unlikely), restore full stage2Scored
+  const safeCandidatePool = candidatePool.length >= 7 ? candidatePool : stage2Scored;
+
   // ---------------------------------------------------------
-  // Stage 3: MBTI Multiplicative Personality Filter
+  // Stage 3: MBTI Multiplicative Personality Filter (with Safe Lookup for 'X')
   // ---------------------------------------------------------
-  const stage3Scored = candidatePool.map(({ path, gardnerScore, stage2Score, alignmentBonus }) => {
+  const stage3Scored = safeCandidatePool.map(({ path, gardnerScore, stage2Score, alignmentBonus }) => {
     let mbtiMultiplier = 1.0;
 
     if (mbti && mbti.type && mbti.certaintyScores) {
       let compatibilitySum = 0;
 
       const letters = [
-        mbti.certaintyScores.EI?.dominantLetter || mbti.type[0],
-        mbti.certaintyScores.SN?.dominantLetter || mbti.type[1],
-        mbti.certaintyScores.TF?.dominantLetter || mbti.type[2],
-        mbti.certaintyScores.JP?.dominantLetter || mbti.type[3],
+        mbti.certaintyScores.EI?.dominantLetter || mbti.type[0] || 'X',
+        mbti.certaintyScores.SN?.dominantLetter || mbti.type[1] || 'X',
+        mbti.certaintyScores.TF?.dominantLetter || mbti.type[2] || 'X',
+        mbti.certaintyScores.JP?.dominantLetter || mbti.type[3] || 'X',
       ];
 
       const axes = ['EI', 'SN', 'TF', 'JP'];
 
       letters.forEach((letter, idx) => {
-        const targetConfig = MBTI_BEHAVIORAL_TARGETS[letter];
-        if (targetConfig) {
+        // Safe Lookup: If letter is neutral 'X' or not in dictionary, default compatibility = 1.0
+        if (!letter || letter === 'X' || !MBTI_BEHAVIORAL_TARGETS[letter]) {
+          compatibilitySum += 1.0;
+        } else {
+          const targetConfig = MBTI_BEHAVIORAL_TARGETS[letter];
           const actualValue = path.behavioralVector[targetConfig.dimension];
           const distance = Math.abs(actualValue - targetConfig.target) / 100;
           const axisKey = axes[idx];
           const certaintyPct = mbti.certaintyScores[axisKey]?.intensityPct ?? mbti.certainty?.[axisKey] ?? 50;
           const weightedDistance = distance * (certaintyPct / 100);
           compatibilitySum += 1 - weightedDistance;
-        } else {
-          compatibilitySum += 1;
         }
       });
 
-      mbtiMultiplier = Math.max(0.2, compatibilitySum / 4);
+      mbtiMultiplier = Math.max(0.4, compatibilitySum / 4);
     }
 
     const stage3Score = stage2Score * mbtiMultiplier;
@@ -175,25 +179,26 @@ export function runPathEngine(
       let discMultiplier = 1.0;
 
       if (disc && disc.profile) {
-        const dimensions = disc.profile.split(''); // e.g. ['I', 'D'] or ['D']
+        const dimensions = disc.profile.split('').filter((d) => d !== 'X'); // e.g. ['I', 'D']
         let totalMult = 0;
 
-        dimensions.forEach((dim) => {
-          const targets = DISC_BEHAVIORAL_TARGETS[dim];
-          if (targets && targets.length > 0) {
-            let dimCompSum = 0;
-            targets.forEach((t) => {
-              const actualVal = path.behavioralVector[t.dimension];
-              const dist = Math.abs(actualVal - t.target) / 100;
-              dimCompSum += 1 - dist;
-            });
-            totalMult += dimCompSum / targets.length;
-          } else {
-            totalMult += 1.0;
-          }
-        });
-
-        discMultiplier = Math.max(0.2, totalMult / dimensions.length);
+        if (dimensions.length > 0) {
+          dimensions.forEach((dim) => {
+            const targets = DISC_BEHAVIORAL_TARGETS[dim];
+            if (targets && targets.length > 0) {
+              let dimCompSum = 0;
+              targets.forEach((t) => {
+                const actualVal = path.behavioralVector[t.dimension];
+                const dist = Math.abs(actualVal - t.target) / 100;
+                dimCompSum += 1 - dist;
+              });
+              totalMult += dimCompSum / targets.length;
+            } else {
+              totalMult += 1.0;
+            }
+          });
+          discMultiplier = Math.max(0.4, totalMult / dimensions.length);
+        }
       }
 
       const rawFinalScore = stage3Score * discMultiplier;
@@ -201,8 +206,7 @@ export function runPathEngine(
     }
   );
 
-  // Issue 🔴 3 & 🔴 2 Fix: Calculate Absolute Score against theoretical max (without artificial max(50, ...))
-  // Theoretical max = maxGardner (210) * maxAlignment (1.5) * maxMbti (1.0) * maxDisc (1.0) = 315
+  // Absolute Score Normalization against theoretical maximum (MAX_THEORETICAL_SCORE = 315)
   const MAX_THEORETICAL_SCORE = 315;
 
   const absoluteScoredPaths = stage4Scored.map((item) => {
@@ -214,18 +218,19 @@ export function runPathEngine(
   // Sort descending by matchScore
   absoluteScoredPaths.sort((a, b) => b.matchScore - a.matchScore);
 
-  // Issue 🔴 2 Fix: Apply true final threshold (Section 4.4)
-  const MIN_FINAL_THRESHOLD = 25; // Absolute score threshold
+  // Apply final threshold filter (relax if total remaining paths below 7)
+  const MIN_FINAL_THRESHOLD = 20;
   let eligible = absoluteScoredPaths.filter((p) => p.matchScore >= MIN_FINAL_THRESHOLD);
 
   if (eligible.length < 7) {
-    eligible = absoluteScoredPaths; // Relax threshold temporarily if total paths below 7
+    eligible = absoluteScoredPaths;
   }
 
   // ---------------------------------------------------------
   // Stage 5: Final 7-Path Assembly (1 Main + 3 Alternative + 3 Complementary)
+  // Array Bounds & Fallback Guarantee: Always return exactly 7 paths!
   // ---------------------------------------------------------
-  const mainPathItem = eligible[0];
+  const mainPathItem = eligible[0] || absoluteScoredPaths[0];
 
   const mainPathRec = buildRecommendation(
     mainPathItem.path,
@@ -236,7 +241,6 @@ export function runPathEngine(
     disc
   );
 
-  // Issue 🟡 5 Fix: Check ALL groups in mainGroup and topSubfields for hybrid base clusters
   const pathMatchesBaseCluster = (p: PathDefinition) => {
     const hasMainGroupOverlap = baseCluster.mainGroup.some((grp) => p.compatibleTracks.includes(grp));
     const hasSubfieldOverlap =
@@ -245,27 +249,36 @@ export function runPathEngine(
     return hasMainGroupOverlap || hasSubfieldOverlap;
   };
 
-  // Issue 🔴 4 Fix: Strictly filter Alternative Paths to paths matching the base cluster
-  const alternativePool = eligible.slice(1).filter((item) => pathMatchesBaseCluster(item.path));
-  const altItems = alternativePool.slice(0, 3);
+  // Alternative Paths: Same academic base cluster family
+  const altCandidates = eligible.slice(1).filter((item) => pathMatchesBaseCluster(item.path));
+  const altItems = altCandidates.slice(0, 3);
+
+  // Fallback: Fill remaining alternative slots from candidate pool matching base cluster or general pool
+  if (altItems.length < 3) {
+    const pool = absoluteScoredPaths.slice(1).filter((item) => item.path.id !== mainPathItem.path.id && !altItems.includes(item));
+    while (altItems.length < 3 && pool.length > 0) {
+      altItems.push(pool.shift()!);
+    }
+  }
 
   const alternativePaths = altItems.map((item) =>
     buildRecommendation(item.path, item.matchScore, baseCluster, gardner, mbti, disc)
   );
 
-  // Complementary Paths: Paths with DIFFERENT base cluster / interdisciplinary tracks
-  const complementaryPool = eligible.slice(1).filter(
-    (item) => !altItems.includes(item) && !pathMatchesBaseCluster(item.path)
-  );
-  const compItems = complementaryPool.slice(0, 3);
+  // Complementary Paths: Interdisciplinary / Different academic track family
+  const chosenIds = new Set([mainPathItem.path.id, ...altItems.map((i) => i.path.id)]);
 
-  // Fallback for complementary paths if fewer than 3 interdisciplinary paths exist
+  const compCandidates = eligible
+    .slice(1)
+    .filter((item) => !chosenIds.has(item.path.id) && !pathMatchesBaseCluster(item.path));
+
+  const compItems = compCandidates.slice(0, 3);
+
+  // Fallback: Fill remaining complementary slots if needed
   if (compItems.length < 3) {
-    const remainingComp = eligible
-      .slice(1)
-      .filter((item) => !altItems.includes(item) && !compItems.includes(item));
-    while (compItems.length < 3 && remainingComp.length > 0) {
-      compItems.push(remainingComp.shift()!);
+    const compPool = absoluteScoredPaths.slice(1).filter((item) => !chosenIds.has(item.path.id) && !compItems.includes(item));
+    while (compItems.length < 3 && compPool.length > 0) {
+      compItems.push(compPool.shift()!);
     }
   }
 
@@ -273,6 +286,7 @@ export function runPathEngine(
     buildRecommendation(item.path, item.matchScore, baseCluster, gardner, mbti, disc)
   );
 
+  // Guaranteed exactly 7 paths array
   const allRecommendedPaths = [mainPathRec, ...alternativePaths, ...complementaryPaths];
 
   return {

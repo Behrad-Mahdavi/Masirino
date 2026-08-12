@@ -72,7 +72,7 @@ export function scoreMbti(responses: MbtiResponse[]): MbtiResult {
 
     scores[axis] = { raw, count: safeCount, midpoint };
 
-    if (raw === midpoint) {
+    if (count === 0 || raw === midpoint) {
       // Explicit neutral state (50% / 50%)
       type += 'X';
       certainty[axis] = 0;

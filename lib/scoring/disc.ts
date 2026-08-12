@@ -59,7 +59,7 @@ export function scoreDisc(blocks: DiscBlockResponse[]): DiscResult {
 
   const primaryDimension = sortedDimensions[0];
   const secondaryCandidate = sortedDimensions[1];
-  const gap = (scores[primaryDimension] ?? 0) - (scores[secondaryCandidate] ?? 0);
+  const gap = Math.abs((scores[primaryDimension] ?? 0) - (scores[secondaryCandidate] ?? 0));
 
   // If gap <= 2, form hybrid 2-letter profile (e.g. DC or ID)
   const isHybrid = gap <= 2;
