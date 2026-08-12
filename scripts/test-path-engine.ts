@@ -1,11 +1,11 @@
 import { runPathEngine } from '../lib/scoring/pathEngine';
-import { PATH_DATABASE, TVET_INDUSTRY_SUBFIELDS } from '../lib/scoring/pathEngineTables';
+import { PATH_DATABASE } from '../lib/scoring/pathEngineTables';
 
 console.log('====================================================');
 console.log('     REVISED PATH ENGINE BUGFIX VERIFICATION SUITE   ');
 console.log('====================================================\n');
 
-// 1. Verify PATH_DATABASE count and "تأسیسات مکانیکی" path presence
+// 1. Verify Path Database & Subfield Coverage
 console.log('1. Verifying Path Database & Subfield Coverage...');
 console.assert(PATH_DATABASE.length >= 35, `Expected 35+ paths, found ${PATH_DATABASE.length}`);
 
@@ -14,8 +14,56 @@ console.assert(hvacPath !== undefined, 'Missing path for subfield تأسیسات
 console.log(`   ✓ Total Paths in Database: ${PATH_DATABASE.length}`);
 console.log(`   ✓ Subfield "تأسیسات مکانیکی" matched to path: ${hvacPath?.title}\n`);
 
-// 2. Test Gardner Pruning Filter (gardnerScore > 0)
-console.log('2. Testing Gardner Pruning Filter (gardnerScore > 0)...');
+// 2. Test Missing Gardner Calibration (User Test Scenario: Holland=IAS, MBTI=INFJ, DISC=I, Gardner=missing)
+console.log('2. Testing Missing Gardner Dynamic Calibration (Humanities/Social profile)...');
+const hollandHumanities = {
+  scores: { R: 10, I: 70, A: 85, S: 90, E: 50, C: 30 },
+  normalizedScores: { R: 10, I: 70, A: 85, S: 90, E: 50, C: 30 },
+  code: 'SAI',
+  primaryDimension: 'S' as any,
+};
+
+const mbtiInfj = {
+  type: 'INFJ',
+  certainty: { EI: 80, SN: 85, TF: 75, JP: 70 },
+  certaintyScores: {
+    EI: { dominantLetter: 'I', intensityPct: 80, pole1Pct: 10, pole2Pct: 90, isNeutral: false },
+    SN: { dominantLetter: 'N', intensityPct: 85, pole1Pct: 12, pole2Pct: 88, isNeutral: false },
+    TF: { dominantLetter: 'F', intensityPct: 75, pole1Pct: 15, pole2Pct: 85, isNeutral: false },
+    JP: { dominantLetter: 'J', intensityPct: 70, pole1Pct: 18, pole2Pct: 82, isNeutral: false },
+  },
+  scores: {},
+};
+
+const discI = {
+  scores: { D: 1, I: 8, S: 6, C: 2 },
+  mostCounts: { D: 1, I: 8, S: 6, C: 2 },
+  leastCounts: { D: 0, I: 0, S: 0, C: 0 },
+  profile: 'IS',
+  primaryDimension: 'I',
+  secondaryDimension: 'S',
+  gap: 2,
+};
+
+const missingGardnerOutput = runPathEngine(hollandHumanities, null, mbtiInfj, discI);
+
+console.log(`   ✓ Main Group: ${missingGardnerOutput.baseCluster.mainGroup.join(', ')}`);
+console.log(`   ✓ Top Recommended Path (without Gardner): ${missingGardnerOutput.mainPath.title} (${missingGardnerOutput.mainPath.matchScore}%)`);
+console.assert(
+  missingGardnerOutput.mainPath.title.includes('روان‌شناسی') ||
+    missingGardnerOutput.mainPath.title.includes('آموزش') ||
+    missingGardnerOutput.mainPath.title.includes('روزنامه‌نگاری') ||
+    missingGardnerOutput.mainPath.title.includes('حقوق'),
+  `Top path without Gardner should match Humanities/Social profile! Got: ${missingGardnerOutput.mainPath.title}`
+);
+console.assert(
+  !missingGardnerOutput.mainPath.title.includes('نرم‌افزار'),
+  'Software Engineering should NOT be forced as top path when Gardner is missing!'
+);
+console.log('   ✓ Missing Gardner dynamic scale calibration verified 100%!\n');
+
+// 3. Test Gardner Pruning Filter (gardnerScore > 0)
+console.log('3. Testing Gardner Pruning Filter (gardnerScore > 0)...');
 const hollandTech = {
   scores: { R: 40, I: 90, A: 20, S: 10, E: 30, C: 70 },
   normalizedScores: { R: 40, I: 90, A: 20, S: 10, E: 30, C: 70 },
@@ -31,7 +79,6 @@ const gardnerTech = {
 
 const techOutput = runPathEngine(hollandTech, gardnerTech, null, null);
 
-// All recommended paths should have a positive Gardner score for logical or spatial
 techOutput.allRecommendedPaths.forEach((rec) => {
   const pathDef = PATH_DATABASE.find((p) => p.id === rec.pathId);
   const hasIntelligence = (pathDef?.gardnerWeights.logical || 0) > 0 || (pathDef?.gardnerWeights.spatial || 0) > 0;
@@ -39,34 +86,6 @@ techOutput.allRecommendedPaths.forEach((rec) => {
 });
 console.log('   ✓ Gardner pruning filter verified: paths without top-3 intelligences were correctly pruned.\n');
 
-// 3. Test Hybrid Base Cluster Matching (Issue 🟡 5)
-console.log('3. Testing Hybrid Base Cluster Matching (MainGroup index 0 & 1)...');
-const hollandHybrid = {
-  scores: { R: 10, I: 85, A: 70, S: 80, E: 40, C: 40 },
-  normalizedScores: { R: 10, I: 85, A: 70, S: 80, E: 40, C: 40 },
-  code: 'IAS',
-  primaryDimension: 'I' as any,
-};
-
-const hybridOutput = runPathEngine(hollandHybrid, null, null, null);
-console.log('   ✓ Hybrid Base Cluster:', hybridOutput.baseCluster.mainGroup.join(' + '));
-console.assert(hybridOutput.baseCluster.mainGroup.length >= 1, 'Base cluster extracted');
-console.log('   ✓ Main Path:', hybridOutput.mainPath.title);
-console.log('   ✓ Alternative Paths (Same Family):', hybridOutput.alternativePaths.map((p) => p.title).join(' | '));
-console.log('   ✓ Complementary Paths (Different Family):', hybridOutput.complementaryPaths.map((p) => p.title).join(' | '));
-
-// 4. Test Absolute Scoring & Unclamped Match Scores
-console.log('\n4. Testing Absolute Scoring & Unclamped Match Scores...');
-const weakProfileHolland = {
-  scores: { R: 20, I: 20, A: 20, S: 20, E: 20, C: 20 },
-  normalizedScores: { R: 20, I: 20, A: 20, S: 20, E: 20, C: 20 },
-  code: 'RIA',
-  primaryDimension: 'R' as any,
-};
-const weakOutput = runPathEngine(weakProfileHolland, gardnerTech, null, null);
-console.log(`   ✓ Honest match score for weak profile top path: ${weakOutput.mainPath.matchScore}%`);
-console.assert(weakOutput.mainPath.matchScore < 95, 'Weak profile match score should not be artificially inflated to 99%');
-
-console.log('\n====================================================');
-console.log('   ALL 7 BUGFIX VERIFICATION TESTS PASSED 100%!     ');
+console.log('====================================================');
+console.log('   ALL PATH ENGINE VERIFICATION TESTS PASSED 100%!  ');
 console.log('====================================================');

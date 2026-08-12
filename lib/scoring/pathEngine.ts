@@ -65,7 +65,9 @@ export function runPathEngine(
   if (disc) completedTestsCount++;
 
   let completenessWarning: string | null = null;
-  if (completedTestsCount < 4) {
+  if (!holland) {
+    completenessWarning = `آزمون رغبت‌سنجی هالند به‌عنوان پیش‌نیاز اصلی هدایت تحصیلی هنوز انجام نشده است. لطفا جهت دست‌یابی به دقت کامل، آزمون هالند را تکمیل کنید.`;
+  } else if (completedTestsCount < 4) {
     completenessWarning = `این نتیجه بر اساس ${completedTestsCount} از ۴ آزمون روان‌سنجی تهیه شده است و با تکمیل باقی آزمون‌ها دقیق‌تر خواهد شد.`;
   }
 
@@ -85,12 +87,16 @@ export function runPathEngine(
   const baseCluster = calculateBaseCluster(userRiasec);
 
   // ---------------------------------------------------------
-  // Stage 2: Initial Path Scoring & Gardner Pruning Filter (gardnerScore > 0)
+  // Stage 2: Initial Path Scoring & Dynamic Scale Calibration
   // ---------------------------------------------------------
   const hasGardnerData = gardner && gardner.topIntelligences && gardner.topIntelligences.length > 0;
 
+  // Baseline scale when Gardner is omitted vs present
+  const BASELINE_GARDNER_SCORE = 100;
+  const MAX_THEORETICAL_SCORE = hasGardnerData ? 315 : 150; // 210 * 1.5 vs 100 * 1.5
+
   const stage2Scored = PATH_DATABASE.map((path) => {
-    let gardnerScore = 10;
+    let gardnerScore = BASELINE_GARDNER_SCORE;
 
     if (hasGardnerData) {
       const rankWeights = [1.0, 0.7, 0.4];
@@ -164,7 +170,7 @@ export function runPathEngine(
         }
       });
 
-      mbtiMultiplier = Math.max(0.4, compatibilitySum / 4);
+      mbtiMultiplier = Math.max(0.1, compatibilitySum / 4);
     }
 
     const stage3Score = stage2Score * mbtiMultiplier;
@@ -197,7 +203,7 @@ export function runPathEngine(
               totalMult += 1.0;
             }
           });
-          discMultiplier = Math.max(0.4, totalMult / dimensions.length);
+          discMultiplier = Math.max(0.1, totalMult / dimensions.length);
         }
       }
 
@@ -206,12 +212,10 @@ export function runPathEngine(
     }
   );
 
-  // Absolute Score Normalization against theoretical maximum (MAX_THEORETICAL_SCORE = 315)
-  const MAX_THEORETICAL_SCORE = 315;
-
+  // Absolute Score Normalization against dynamic theoretical maximum
   const absoluteScoredPaths = stage4Scored.map((item) => {
     const rawPct = (item.rawFinalScore / MAX_THEORETICAL_SCORE) * 100;
-    const matchScore = Math.min(99, Math.max(10, Math.round(rawPct)));
+    const matchScore = Math.min(99, Math.max(5, Math.round(rawPct)));
     return { ...item, matchScore };
   });
 
@@ -219,7 +223,7 @@ export function runPathEngine(
   absoluteScoredPaths.sort((a, b) => b.matchScore - a.matchScore);
 
   // Apply final threshold filter (relax if total remaining paths below 7)
-  const MIN_FINAL_THRESHOLD = 20;
+  const MIN_FINAL_THRESHOLD = 15;
   let eligible = absoluteScoredPaths.filter((p) => p.matchScore >= MIN_FINAL_THRESHOLD);
 
   if (eligible.length < 7) {
