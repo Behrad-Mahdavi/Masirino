@@ -6,7 +6,9 @@
     "dev": "next dev -p 3005",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest",
+    "debug:path-engine": "npx tsx src/pathEngine/debug/cli.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -23,14 +25,17 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.10.10",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.19.0",
     "eslint-config-next": "15.1.6",
+    "jest": "^30.4.2",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
+    "ts-jest": "^29.4.12",
     "typescript": "^5.7.3"
   }
 }

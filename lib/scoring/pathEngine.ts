@@ -49,12 +49,105 @@ export interface PathEngineOutput {
   computedAt: string;
 }
 
+export interface Stage1Trace {
+  groupScoresRaw: { group: string; rawScore: number }[];
+  groupScoresNormalized: { group: string; score: number }[];
+  groupGap: number; // فاصله‌ی امتیاز نرمال‌شده‌ی رتبه ۱ و ۲
+  mainGroup: string[];
+  subfieldScoresRaw: { subfield: string; rawScore: number }[] | null;
+  subfieldScoresNormalized: { subfield: string; score: number }[] | null;
+  subfieldGap: number | null;
+  topSubfields: string[];
+}
+
+export interface Stage2Trace {
+  pathId: string;
+  title: string;
+  gardnerScore: number;
+  alignmentBonus: number;
+  alignmentReason: 'subfield-match' | 'main-group-match' | 'no-match';
+  stage2Score: number;
+  excludedFromInitialList: boolean; // true اگر gardnerScore === 0 (طبق سند اصلی باید حذف شود)
+}
+
+export interface Stage3Trace {
+  pathId: string;
+  axisBreakdown: {
+    axis: 'EI' | 'SN' | 'TF' | 'JP';
+    dominantLetter: string;
+    targetDimension: string;
+    targetValue: number;
+    actualValue: number;
+    distance: number;
+    certaintyPct: number;
+    weightedDistance: number;
+    axisContribution: number; // 1 - weightedDistance
+  }[];
+  mbtiMultiplier: number;
+  stage3Score: number;
+}
+
+export interface Stage4Trace {
+  pathId: string;
+  dimBreakdown: {
+    discLetter: string;
+    targetDimension: string;
+    targetValue: number;
+    actualValue: number;
+    distance: number;
+    dimContribution: number;
+  }[];
+  discMultiplier: number;
+  rawFinalScore: number;
+}
+
+export interface Stage4bTrace {
+  maxRawScore: number;
+  allPathScores: { pathId: string; rawFinalScore: number; matchScore: number }[];
+  thresholdValue: number; // مثلا 15 یا 55
+  eligibleCountBeforeRelax: number;
+  thresholdWasRelaxed: boolean;
+}
+
+export interface Stage5Trace {
+  mainPathId: string;
+  alternativePool: { pathId: string; matchesMainGroup: boolean }[]; // matchesMainGroup باید همیشه true باشد
+  alternativePoolFallbackTriggered: boolean;
+  complementaryPool: { pathId: string; matchesMainGroup: boolean }[];
+  complementaryPoolFallbackTriggered: boolean;
+}
+
+export interface PathEngineTrace {
+  input: {
+    hollandProvided: boolean;
+    gardnerProvided: boolean;
+    mbtiProvided: boolean;
+    discProvided: boolean;
+  };
+  stage1: Stage1Trace;
+  stage2: Stage2Trace[]; // طول = ۲۸ (همه‌ی مسیرهای دیتابیس)
+  stage3: Stage3Trace[];
+  stage4: Stage4Trace[];
+  stage4b: Stage4bTrace;
+  stage5: Stage5Trace;
+  finalOutput: PathEngineOutput;
+}
+
 export function runPathEngine(
   holland: HollandResult | null,
   gardner: GardnerResult | null,
   mbti: MbtiResult | null,
   disc: DiscResult | null
 ): PathEngineOutput {
+  return runPathEngineWithTrace(holland, gardner, mbti, disc).finalOutput;
+}
+
+export function runPathEngineWithTrace(
+  holland: HollandResult | null,
+  gardner: GardnerResult | null,
+  mbti: MbtiResult | null,
+  disc: DiscResult | null
+): PathEngineTrace {
   // ---------------------------------------------------------
   // Stage 0: Data Completeness Check
   // ---------------------------------------------------------
@@ -84,7 +177,7 @@ export function runPathEngine(
   // ---------------------------------------------------------
   // Stage 1: Base Cluster Calculation (2-Level Algorithm)
   // ---------------------------------------------------------
-  const baseCluster = calculateBaseCluster(userRiasec);
+  const { baseCluster, trace: stage1Trace } = calculateBaseClusterWithTrace(userRiasec);
 
   // ---------------------------------------------------------
   // Stage 2: Initial Path Scoring & Dynamic Scale Calibration
@@ -95,6 +188,7 @@ export function runPathEngine(
   const BASELINE_GARDNER_SCORE = 100;
   const MAX_THEORETICAL_SCORE = hasGardnerData ? 220 : 120;
 
+  const stage2Trace: Stage2Trace[] = [];
   const stage2Scored = PATH_DATABASE.map((path) => {
     let gardnerScore = BASELINE_GARDNER_SCORE;
 
@@ -112,6 +206,7 @@ export function runPathEngine(
 
     // Base cluster alignment bonus (1.5x for exact subfield leaf match, 1.3x for main group match)
     let alignmentBonus = 1.0;
+    let alignmentReason: 'subfield-match' | 'main-group-match' | 'no-match' = 'no-match';
     const pathTracks = path.compatibleTracks;
 
     const hasSubfieldMatch =
@@ -122,11 +217,25 @@ export function runPathEngine(
 
     if (hasSubfieldMatch) {
       alignmentBonus = 1.5; // +50% bonus for exact leaf match
+      alignmentReason = 'subfield-match';
     } else if (hasMainGroupMatch) {
       alignmentBonus = 1.3; // +30% bonus for main track match
+      alignmentReason = 'main-group-match';
     }
 
     const stage2Score = gardnerScore * alignmentBonus;
+    const excludedFromInitialList = Boolean(hasGardnerData && gardnerScore === 0);
+
+    stage2Trace.push({
+      pathId: path.id,
+      title: path.title,
+      gardnerScore,
+      alignmentBonus,
+      alignmentReason,
+      stage2Score,
+      excludedFromInitialList,
+    });
+
     return { path, gardnerScore, stage2Score, alignmentBonus };
   });
 
@@ -141,8 +250,12 @@ export function runPathEngine(
   // ---------------------------------------------------------
   // Stage 3: MBTI Multiplicative Personality Filter (with Safe Lookup for 'X')
   // ---------------------------------------------------------
-  const stage3Scored = safeCandidatePool.map(({ path, gardnerScore, stage2Score, alignmentBonus }) => {
+  const stage3Trace: Stage3Trace[] = [];
+  const stage3Scored = PATH_DATABASE.map((path) => {
+    const stage2Item = stage2Scored.find((s) => s.path.id === path.id)!;
     let mbtiMultiplier = 1.0;
+    const axisBreakdown: Stage3Trace['axisBreakdown'] = [];
+    const axes: ('EI' | 'SN' | 'TF' | 'JP')[] = ['EI', 'SN', 'TF', 'JP'];
 
     if (mbti && mbti.type && mbti.certaintyScores) {
       let compatibilitySum = 0;
@@ -154,64 +267,135 @@ export function runPathEngine(
         mbti.certaintyScores.JP?.dominantLetter || mbti.type[3] || 'X',
       ];
 
-      const axes = ['EI', 'SN', 'TF', 'JP'];
-
       letters.forEach((letter, idx) => {
-        // Safe Lookup: If letter is neutral 'X' or not in dictionary, default compatibility = 1.0
-        if (!letter || letter === 'X' || !MBTI_BEHAVIORAL_TARGETS[letter]) {
+        const axisKey = axes[idx];
+        const targetConfig = letter && letter !== 'X' ? MBTI_BEHAVIORAL_TARGETS[letter] : null;
+
+        if (!targetConfig) {
           compatibilitySum += 1.0;
+          axisBreakdown.push({
+            axis: axisKey,
+            dominantLetter: letter || 'X',
+            targetDimension: '-',
+            targetValue: 0,
+            actualValue: 0,
+            distance: 0,
+            certaintyPct: 0,
+            weightedDistance: 0,
+            axisContribution: 1.0,
+          });
         } else {
-          const targetConfig = MBTI_BEHAVIORAL_TARGETS[letter];
           const actualValue = path.behavioralVector[targetConfig.dimension];
           const distance = Math.abs(actualValue - targetConfig.target) / 100;
-          const axisKey = axes[idx];
-          const certaintyPct = mbti.certaintyScores[axisKey]?.intensityPct ?? mbti.certainty?.[axisKey] ?? 50;
+          const certaintyPct =
+            mbti.certaintyScores[axisKey]?.intensityPct ?? mbti.certainty?.[axisKey] ?? 50;
           const weightedDistance = distance * (certaintyPct / 100);
-          compatibilitySum += 1 - weightedDistance;
+          const axisContribution = 1 - weightedDistance;
+          compatibilitySum += axisContribution;
+
+          axisBreakdown.push({
+            axis: axisKey,
+            dominantLetter: letter,
+            targetDimension: targetConfig.dimension,
+            targetValue: targetConfig.target,
+            actualValue,
+            distance,
+            certaintyPct,
+            weightedDistance,
+            axisContribution,
+          });
         }
       });
 
       mbtiMultiplier = Math.max(0.1, compatibilitySum / 4);
+    } else {
+      axes.forEach((axisKey) => {
+        axisBreakdown.push({
+          axis: axisKey,
+          dominantLetter: '-',
+          targetDimension: '-',
+          targetValue: 0,
+          actualValue: 0,
+          distance: 0,
+          certaintyPct: 0,
+          weightedDistance: 0,
+          axisContribution: 1.0,
+        });
+      });
     }
 
-    const stage3Score = stage2Score * mbtiMultiplier;
-    return { path, gardnerScore, stage3Score, mbtiMultiplier, alignmentBonus };
+    const stage3Score = stage2Item.stage2Score * mbtiMultiplier;
+
+    stage3Trace.push({
+      pathId: path.id,
+      axisBreakdown,
+      mbtiMultiplier,
+      stage3Score,
+    });
+
+    return {
+      path,
+      gardnerScore: stage2Item.gardnerScore,
+      stage2Score: stage2Item.stage2Score,
+      stage3Score,
+      mbtiMultiplier,
+      alignmentBonus: stage2Item.alignmentBonus,
+    };
   });
 
   // ---------------------------------------------------------
   // Stage 4: DISC Multiplicative Behavioral Filter & Absolute Scoring
   // ---------------------------------------------------------
-  const stage4Scored = stage3Scored.map(
-    ({ path, gardnerScore, stage3Score, mbtiMultiplier, alignmentBonus }) => {
-      let discMultiplier = 1.0;
+  const stage4Trace: Stage4Trace[] = [];
+  const stage4Scored = stage3Scored.map((item) => {
+    const { path, stage3Score } = item;
+    let discMultiplier = 1.0;
+    const dimBreakdown: Stage4Trace['dimBreakdown'] = [];
 
-      if (disc && disc.profile) {
-        const dimensions = disc.profile.split('').filter((d) => d !== 'X'); // e.g. ['I', 'D']
-        let totalMult = 0;
+    if (disc && disc.profile) {
+      const dimensions = disc.profile.split('').filter((d) => d !== 'X'); // e.g. ['I', 'D']
+      let totalMult = 0;
 
-        if (dimensions.length > 0) {
-          dimensions.forEach((dim) => {
-            const targets = DISC_BEHAVIORAL_TARGETS[dim];
-            if (targets && targets.length > 0) {
-              let dimCompSum = 0;
-              targets.forEach((t) => {
-                const actualVal = path.behavioralVector[t.dimension];
-                const dist = Math.abs(actualVal - t.target) / 100;
-                dimCompSum += 1 - dist;
+      if (dimensions.length > 0) {
+        dimensions.forEach((dim) => {
+          const targets = DISC_BEHAVIORAL_TARGETS[dim];
+          if (targets && targets.length > 0) {
+            let dimCompSum = 0;
+            targets.forEach((t) => {
+              const actualVal = path.behavioralVector[t.dimension];
+              const dist = Math.abs(actualVal - t.target) / 100;
+              const dimContribution = 1 - dist;
+              dimCompSum += dimContribution;
+
+              dimBreakdown.push({
+                discLetter: dim,
+                targetDimension: t.dimension,
+                targetValue: t.target,
+                actualValue: actualVal,
+                distance: dist,
+                dimContribution,
               });
-              totalMult += dimCompSum / targets.length;
-            } else {
-              totalMult += 1.0;
-            }
-          });
-          discMultiplier = Math.max(0.1, totalMult / dimensions.length);
-        }
+            });
+            totalMult += dimCompSum / targets.length;
+          } else {
+            totalMult += 1.0;
+          }
+        });
+        discMultiplier = Math.max(0.1, totalMult / dimensions.length);
       }
-
-      const rawFinalScore = stage3Score * discMultiplier;
-      return { path, rawFinalScore, gardnerScore, mbtiMultiplier, discMultiplier, alignmentBonus };
     }
-  );
+
+    const rawFinalScore = stage3Score * discMultiplier;
+
+    stage4Trace.push({
+      pathId: path.id,
+      dimBreakdown,
+      discMultiplier,
+      rawFinalScore,
+    });
+
+    return { ...item, rawFinalScore, discMultiplier };
+  });
 
   // Absolute Score Normalization against dynamic theoretical maximum
   const absoluteScoredPaths = stage4Scored.map((item) => {
@@ -225,17 +409,33 @@ export function runPathEngine(
 
   // Apply final threshold filter (relax if total remaining paths below 7)
   const MIN_FINAL_THRESHOLD = 15;
-  let eligible = absoluteScoredPaths.filter((p) => p.matchScore >= MIN_FINAL_THRESHOLD);
+  const eligibleBeforeRelax = absoluteScoredPaths.filter(
+    (p) => (!hasGardnerData || p.gardnerScore > 0) && p.matchScore >= MIN_FINAL_THRESHOLD
+  );
 
-  if (eligible.length < 7) {
-    eligible = absoluteScoredPaths;
-  }
+  const thresholdWasRelaxed = eligibleBeforeRelax.length < 7;
+  const eligible = thresholdWasRelaxed
+    ? (hasGardnerData ? absoluteScoredPaths.filter((p) => p.gardnerScore > 0) : absoluteScoredPaths)
+    : eligibleBeforeRelax;
+
+  const safeEligible = eligible.length >= 7 ? eligible : absoluteScoredPaths;
+
+  const stage4bTrace: Stage4bTrace = {
+    maxRawScore: MAX_THEORETICAL_SCORE,
+    allPathScores: absoluteScoredPaths.map((p) => ({
+      pathId: p.path.id,
+      rawFinalScore: p.rawFinalScore,
+      matchScore: p.matchScore,
+    })),
+    thresholdValue: MIN_FINAL_THRESHOLD,
+    eligibleCountBeforeRelax: eligibleBeforeRelax.length,
+    thresholdWasRelaxed,
+  };
 
   // ---------------------------------------------------------
   // Stage 5: Final 7-Path Assembly (1 Main + 3 Alternative + 3 Complementary)
-  // Array Bounds & Fallback Guarantee: Always return exactly 7 paths!
   // ---------------------------------------------------------
-  const mainPathItem = eligible[0] || absoluteScoredPaths[0];
+  const mainPathItem = safeEligible[0] || absoluteScoredPaths[0];
 
   const mainPathRec = buildRecommendation(
     mainPathItem.path,
@@ -255,12 +455,16 @@ export function runPathEngine(
   };
 
   // Alternative Paths: Same academic base cluster family
-  const altCandidates = eligible.slice(1).filter((item) => pathMatchesBaseCluster(item.path));
+  const altCandidates = safeEligible.slice(1).filter((item) => pathMatchesBaseCluster(item.path));
   const altItems = altCandidates.slice(0, 3);
+  let alternativePoolFallbackTriggered = false;
 
   // Fallback: Fill remaining alternative slots from candidate pool matching base cluster or general pool
   if (altItems.length < 3) {
-    const pool = absoluteScoredPaths.slice(1).filter((item) => item.path.id !== mainPathItem.path.id && !altItems.includes(item));
+    alternativePoolFallbackTriggered = true;
+    const pool = absoluteScoredPaths.slice(1).filter(
+      (item) => item.path.id !== mainPathItem.path.id && !altItems.some((i) => i.path.id === item.path.id)
+    );
     while (altItems.length < 3 && pool.length > 0) {
       altItems.push(pool.shift()!);
     }
@@ -271,32 +475,33 @@ export function runPathEngine(
   );
 
   // Complementary Paths: Creative and Combined (Interdisciplinary) or next best paths.
-  // We no longer force them to be from a completely different academic family (!pathMatchesBaseCluster),
-  // as that resulted in disastrously low-scoring irrelevant recommendations.
-  // Instead, we pick the highest scoring remaining paths, slightly boosting interdisciplinary ones.
   const chosenIds = new Set([mainPathItem.path.id, ...altItems.map((i) => i.path.id)]);
 
   const isInterdisciplinary = (p: PathDefinition) => {
-    // Count how many distinct main academic groups this path belongs to
-    const mainGroupsCount = p.compatibleTracks.filter(t => Object.values(MainGroups).includes(t as MainGroups)).length;
+    const mainGroupsCount = p.compatibleTracks.filter((t) =>
+      Object.values(MainGroups).includes(t as MainGroups)
+    ).length;
     return mainGroupsCount > 1;
   };
 
-  const compCandidates = eligible
+  const compCandidates = safeEligible
     .slice(1)
     .filter((item) => !chosenIds.has(item.path.id))
     .sort((a, b) => {
-      // Give a slight edge to interdisciplinary (creative/combined) paths
       const aBonus = isInterdisciplinary(a.path) ? 5 : 0;
       const bBonus = isInterdisciplinary(b.path) ? 5 : 0;
-      return (b.matchScore + bBonus) - (a.matchScore + aBonus);
+      return b.matchScore + bBonus - (a.matchScore + aBonus);
     });
 
   const compItems = compCandidates.slice(0, 3);
+  let complementaryPoolFallbackTriggered = false;
 
   // Fallback: Fill remaining complementary slots if needed
   if (compItems.length < 3) {
-    const compPool = absoluteScoredPaths.slice(1).filter((item) => !chosenIds.has(item.path.id) && !compItems.includes(item));
+    complementaryPoolFallbackTriggered = true;
+    const compPool = absoluteScoredPaths.slice(1).filter(
+      (item) => !chosenIds.has(item.path.id) && !compItems.some((i) => i.path.id === item.path.id)
+    );
     while (compItems.length < 3 && compPool.length > 0) {
       compItems.push(compPool.shift()!);
     }
@@ -309,7 +514,7 @@ export function runPathEngine(
   // Guaranteed exactly 7 paths array
   const allRecommendedPaths = [mainPathRec, ...alternativePaths, ...complementaryPaths];
 
-  return {
+  const finalOutput: PathEngineOutput = {
     completenessWarning,
     completedTestsCount,
     baseCluster,
@@ -319,45 +524,87 @@ export function runPathEngine(
     allRecommendedPaths,
     computedAt: new Date().toISOString(),
   };
+
+  const stage5Trace: Stage5Trace = {
+    mainPathId: mainPathItem.path.id,
+    alternativePool: altItems.map((item) => ({
+      pathId: item.path.id,
+      matchesMainGroup: pathMatchesBaseCluster(item.path),
+    })),
+    alternativePoolFallbackTriggered,
+    complementaryPool: compItems.map((item) => ({
+      pathId: item.path.id,
+      matchesMainGroup: pathMatchesBaseCluster(item.path),
+    })),
+    complementaryPoolFallbackTriggered,
+  };
+
+  return {
+    input: {
+      hollandProvided: !!holland,
+      gardnerProvided: !!gardner,
+      mbtiProvided: !!mbti,
+      discProvided: !!disc,
+    },
+    stage1: stage1Trace,
+    stage2: stage2Trace,
+    stage3: stage3Trace,
+    stage4: stage4Trace,
+    stage4b: stage4bTrace,
+    stage5: stage5Trace,
+    finalOutput,
+  };
 }
 
 // ---------------------------------------------------------
 // Helper: 2-Level Base Cluster Calculation (Stage 1-A & 1-B)
 // ---------------------------------------------------------
-function calculateBaseCluster(userRiasec: RiasecVector): BaseClusterResult {
+export function calculateBaseClusterWithTrace(userRiasec: RiasecVector): {
+  baseCluster: BaseClusterResult;
+  trace: Stage1Trace;
+} {
   // Stage 1-A: Evaluate 5 Main Groups
-  const groupScores: { group: string; score: number }[] = [];
+  const groupScoresRaw: { group: string; rawScore: number }[] = [];
 
   for (const [group, vector] of Object.entries(MAIN_GROUPS_VECTORS)) {
     let score = 0;
     for (const key of ['R', 'I', 'A', 'S', 'E', 'C'] as (keyof RiasecVector)[]) {
       score += (userRiasec[key] || 0) * (vector[key] || 0);
     }
-    groupScores.push({ group, score });
+    groupScoresRaw.push({ group, rawScore: score });
   }
 
   // Normalize group scores to 0-100
-  const maxGroupScore = Math.max(...groupScores.map((g) => g.score), 1);
-  groupScores.forEach((g) => {
-    g.score = Math.round((g.score / maxGroupScore) * 100);
-  });
+  const maxGroupScore = Math.max(...groupScoresRaw.map((g) => g.rawScore), 1);
+  const groupScoresNormalized = groupScoresRaw.map((g) => ({
+    group: g.group,
+    score: Math.round((g.rawScore / maxGroupScore) * 100),
+  }));
 
-  groupScores.sort((a, b) => b.score - a.score);
+  groupScoresNormalized.sort((a, b) => b.score - a.score);
+
+  const groupGap =
+    groupScoresNormalized.length > 1
+      ? groupScoresNormalized[0].score - groupScoresNormalized[1].score
+      : 0;
 
   // Apply gap <= 10 threshold for hybrid main group
-  const mainGroup: string[] = [groupScores[0].group];
-  if (groupScores.length > 1 && groupScores[0].score - groupScores[1].score <= 10) {
-    mainGroup.push(groupScores[1].group);
+  const mainGroup: string[] = [groupScoresNormalized[0].group];
+  if (groupScoresNormalized.length > 1 && groupGap <= 10) {
+    mainGroup.push(groupScoresNormalized[1].group);
   }
 
   // Stage 1-B: Evaluate Subfields if main group contains TVET
   const topSubfields: string[] = [];
+  let subfieldScoresRaw: { subfield: string; rawScore: number }[] | null = null;
+  let subfieldScoresNormalized: { subfield: string; score: number }[] | null = null;
+  let subfieldGap: number | null = null;
 
   const containsIndustry = mainGroup.includes(MainGroups.TVET_INDUSTRY);
   const containsArts = mainGroup.includes(MainGroups.TVET_ARTS);
 
   if (containsIndustry || containsArts) {
-    const subfieldScores: { subfield: string; score: number }[] = [];
+    subfieldScoresRaw = [];
 
     if (containsIndustry) {
       for (const [subfield, vector] of Object.entries(TVET_INDUSTRY_SUBFIELDS)) {
@@ -365,7 +612,7 @@ function calculateBaseCluster(userRiasec: RiasecVector): BaseClusterResult {
         for (const key of ['R', 'I', 'A', 'S', 'E', 'C'] as (keyof RiasecVector)[]) {
           score += (userRiasec[key] || 0) * (vector[key] || 0);
         }
-        subfieldScores.push({ subfield, score });
+        subfieldScoresRaw.push({ subfield, rawScore: score });
       }
     }
 
@@ -375,27 +622,49 @@ function calculateBaseCluster(userRiasec: RiasecVector): BaseClusterResult {
         for (const key of ['R', 'I', 'A', 'S', 'E', 'C'] as (keyof RiasecVector)[]) {
           score += (userRiasec[key] || 0) * (vector[key] || 0);
         }
-        subfieldScores.push({ subfield, score });
+        subfieldScoresRaw.push({ subfield, rawScore: score });
       }
     }
 
-    const maxSubScore = Math.max(...subfieldScores.map((s) => s.score), 1);
-    subfieldScores.forEach((s) => {
-      s.score = Math.round((s.score / maxSubScore) * 100);
-    });
+    const maxSubScore = Math.max(...subfieldScoresRaw.map((s) => s.rawScore), 1);
+    subfieldScoresNormalized = subfieldScoresRaw.map((s) => ({
+      subfield: s.subfield,
+      score: Math.round((s.rawScore / maxSubScore) * 100),
+    }));
 
-    subfieldScores.sort((a, b) => b.score - a.score);
+    subfieldScoresNormalized.sort((a, b) => b.score - a.score);
+
+    subfieldGap =
+      subfieldScoresNormalized.length > 1
+        ? subfieldScoresNormalized[0].score - subfieldScoresNormalized[1].score
+        : 0;
 
     // Apply gap <= 8 threshold for TVET subfields
-    if (subfieldScores.length > 0) {
-      topSubfields.push(subfieldScores[0].subfield);
-      if (subfieldScores.length > 1 && subfieldScores[0].score - subfieldScores[1].score <= 8) {
-        topSubfields.push(subfieldScores[1].subfield);
+    if (subfieldScoresNormalized.length > 0) {
+      topSubfields.push(subfieldScoresNormalized[0].subfield);
+      if (subfieldScoresNormalized.length > 1 && subfieldGap <= 8) {
+        topSubfields.push(subfieldScoresNormalized[1].subfield);
       }
     }
   }
 
-  return { mainGroup, topSubfields };
+  const baseCluster: BaseClusterResult = { mainGroup, topSubfields };
+  const trace: Stage1Trace = {
+    groupScoresRaw,
+    groupScoresNormalized,
+    groupGap,
+    mainGroup,
+    subfieldScoresRaw,
+    subfieldScoresNormalized,
+    subfieldGap,
+    topSubfields,
+  };
+
+  return { baseCluster, trace };
+}
+
+export function calculateBaseCluster(userRiasec: RiasecVector): BaseClusterResult {
+  return calculateBaseClusterWithTrace(userRiasec).baseCluster;
 }
 
 // ---------------------------------------------------------

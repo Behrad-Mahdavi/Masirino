@@ -76,30 +76,31 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Center: Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-8 xl:gap-12">
+        <nav className="hidden lg:flex items-center gap-6 xl:gap-8">
           <Link
             href="/"
-            className="text-base font-bold text-navy-700 hover:text-teal-700 transition-colors py-1"
+            className="text-sm font-bold text-navy-700 hover:text-teal-700 transition-colors py-1"
           >
             صفحه اصلی
           </Link>
           <Link
             href="/#tests"
-            className="text-base font-bold text-navy-700 hover:text-teal-700 transition-colors py-1"
+            className="text-sm font-bold text-navy-700 hover:text-teal-700 transition-colors py-1"
           >
             ۴ آزمون روان‌سنجی
           </Link>
           <Link
-            href="/#plans"
-            className="text-base font-bold text-navy-700 hover:text-teal-700 transition-colors py-1"
+            href="/dashboard"
+            className="text-sm font-bold text-navy-700 hover:text-teal-700 transition-colors py-1"
           >
-            پلن‌های مشاوره
+            داشبورد
           </Link>
           <Link
-            href="/dashboard"
-            className="text-base font-bold text-navy-700 hover:text-teal-700 transition-colors py-1"
+            href="/test-harness"
+            className="text-sm font-bold text-teal-700 hover:text-teal-800 bg-teal-100/70 hover:bg-teal-100 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5"
           >
-            داشبورد دانش‌آموز
+            <Compass className="w-3.5 h-3.5" />
+            <span>میز آزمایش الگوریتم</span>
           </Link>
         </nav>
 
@@ -165,18 +166,19 @@ export const Header: React.FC = () => {
             ۴ آزمون روان‌سنجی
           </Link>
           <Link
-            href="/#plans"
-            onClick={() => setMobileMenuOpen(false)}
-            className="text-base font-black text-ink-900 hover:text-teal-700"
-          >
-            پلن‌های مشاوره
-          </Link>
-          <Link
             href="/dashboard"
             onClick={() => setMobileMenuOpen(false)}
             className="text-base font-black text-ink-900 hover:text-teal-700"
           >
             داشبورد دانش‌آموز
+          </Link>
+          <Link
+            href="/test-harness"
+            onClick={() => setMobileMenuOpen(false)}
+            className="text-base font-black text-teal-700 hover:text-teal-800 flex items-center gap-2"
+          >
+            <Compass className="w-4 h-4" />
+            <span>میز آزمایش الگوریتم (Test Harness)</span>
           </Link>
 
           <div className="pt-4 border-t-thick border-neutral-200 flex flex-col gap-3">

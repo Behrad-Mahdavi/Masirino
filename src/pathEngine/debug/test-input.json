@@ -1,0 +1,20 @@
+{
+  "holland": {
+    "normalizedScores": { "R": 40, "I": 85, "A": 25, "S": 20, "E": 30, "C": 65 }
+  },
+  "gardner": {
+    "topIntelligences": ["logical", "spatial", "intrapersonal"]
+  },
+  "mbti": {
+    "type": "INTJ",
+    "certaintyScores": {
+      "EI": { "dominantLetter": "I", "intensityPct": 70 },
+      "SN": { "dominantLetter": "N", "intensityPct": 60 },
+      "TF": { "dominantLetter": "T", "intensityPct": 80 },
+      "JP": { "dominantLetter": "J", "intensityPct": 55 }
+    }
+  },
+  "disc": {
+    "profile": "C"
+  }
+}
