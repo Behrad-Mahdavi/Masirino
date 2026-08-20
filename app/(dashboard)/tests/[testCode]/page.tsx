@@ -178,20 +178,26 @@ export default function TestRunnerPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6 px-3 sm:px-4 md:px-6 py-2 sm:py-4">
       {/* Top Bar Navigation */}
-      <div className="flex items-center justify-between">
-        <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-ink-500 hover:text-teal-700">
-          <ArrowRight className="w-4 h-4" /> بازگشت به داشبورد
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold text-ink-500 hover:text-teal-700 transition-colors"
+        >
+          <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span>بازگشت به داشبورد</span>
         </Link>
-        <span className="text-xs font-bold text-ink-500">ذخیره‌سازی هوشمند در Supabase</span>
+        <span className="text-[11px] sm:text-xs font-bold text-ink-500 hidden sm:inline">
+          ذخیره‌سازی هوشمند در Supabase
+        </span>
       </div>
 
       {/* Progress Bar */}
       <TestProgressBar current={answeredCount} total={totalCount} testName={testName} />
 
       {/* Questions Renderer */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {testCode === 'HOLLAND' &&
           HOLLAND_QUESTIONS.map((q, idx) => (
             <LikertQuestion
@@ -243,9 +249,11 @@ export default function TestRunnerPage() {
       </div>
 
       {/* Bottom Submit Action */}
-      <div className="sticky bottom-4 bg-white border-thick border-ink-900 rounded-xl p-4 elevated-xl flex justify-between items-center mt-8">
-        <span className="text-xs font-bold text-ink-500 font-numeric">
-          {isComplete ? 'تمامی سوالات پاسخ داده شدند.' : `لطفاً به تمامی ${totalCount} سوال پاسخ دهید.`}
+      <div className="sticky bottom-3 sm:bottom-4 z-40 bg-white/95 backdrop-blur-md border-thick border-ink-900 rounded-2xl p-3.5 sm:p-4.5 elevated-xl flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-4 mt-6 sm:mt-8 shadow-2xl">
+        <span className="text-[11px] sm:text-xs font-bold text-ink-600 font-numeric text-center sm:text-right">
+          {isComplete
+            ? 'تمامی سوالات با موفقیت پاسخ داده شدند.'
+            : `لطفاً به تمامی ${totalCount} سوال پاسخ دهید (${totalCount - answeredCount} سوال باقی مانده).`}
         </span>
 
         <Button
@@ -254,9 +262,10 @@ export default function TestRunnerPage() {
           disabled={!isComplete}
           loading={submitting}
           onClick={handleSubmit}
-          icon={<CheckCircle2 className="w-5 h-5" />}
+          className="w-full sm:w-auto shrink-0 justify-center text-xs sm:text-sm py-3 sm:py-3.5"
+          icon={<CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />}
         >
-          ثبت و ذخیره در دیتابیس
+          ثبت و ذخیره نهایی
         </Button>
       </div>
     </div>
