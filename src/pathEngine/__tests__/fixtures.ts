@@ -11,7 +11,7 @@ export function buildHolland(
 }
 
 export function buildGardner(
-  topIntelligences: string[],
+  topIntelligences: string[] = ['logical', 'spatial', 'linguistic'],
   scores?: Record<string, number>
 ): GardnerResult {
   return { topIntelligences, scores } as unknown as GardnerResult;

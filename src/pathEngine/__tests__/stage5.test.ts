@@ -1,58 +1,57 @@
-import { runPathEngineWithTrace } from '../pathEngine';
+import { runPathEngineV2 } from '../pathEngine';
 import { buildHolland, buildGardner, buildMbti, buildDisc } from './fixtures';
-import { MainGroups } from '../pathEngineTables';
 
-describe('Stage 5 — Final 7-Path Assembly', () => {
-  test('Scenario 22: Output always contains exactly 7 recommendations', () => {
-    const trace = runPathEngineWithTrace(
-      buildHolland(),
-      buildGardner(['logical', 'spatial']),
-      buildMbti('INTJ'),
-      buildDisc('C')
-    );
-
-    expect(trace.finalOutput.allRecommendedPaths.length).toBe(7);
-    expect(trace.finalOutput.alternativePaths.length).toBe(3);
-    expect(trace.finalOutput.complementaryPaths.length).toBe(3);
-    expect(trace.finalOutput.mainPath).toBeDefined();
-  });
-
-  test('Scenario 23: No duplicate pathId among all 7 recommended paths', () => {
-    const trace = runPathEngineWithTrace(
-      buildHolland({ R: 70, I: 80, A: 30, S: 20, E: 40, C: 50 }),
+describe('Path Engine V2 — Stage 5: 7-Path Basket Assembler', () => {
+  test('Scenario 1: Basket contains exactly 1 Main + 3 Alternative + 3 Complementary (7 paths)', () => {
+    const output = runPathEngineV2(
+      buildHolland({ R: 40, I: 92, A: 30, S: 20, E: 35, C: 70 }),
       buildGardner(['logical', 'spatial', 'intrapersonal']),
       buildMbti('INTJ'),
       buildDisc('C')
     );
 
-    const ids = trace.finalOutput.allRecommendedPaths.map((p) => p.pathId);
-    const uniqueIds = new Set(ids);
-
-    expect(uniqueIds.size).toBe(7);
+    expect(output.basket.mainPath).toBeDefined();
+    expect(output.basket.alternativePaths.length).toBe(3);
+    expect(output.basket.complementaryPaths.length).toBe(3);
   });
 
-  test('Scenario 24: Alternative paths match the base cluster when pool permits', () => {
-    const trace = runPathEngineWithTrace(
-      buildHolland({ R: 20, I: 90, A: 20, S: 20, E: 20, C: 20 }), // Math-Physics
-      buildGardner(['logical', 'spatial']),
+  test('Scenario 2: Main path has the highest match score', () => {
+    const output = runPathEngineV2(
+      buildHolland({ R: 40, I: 92, A: 30, S: 20, E: 35, C: 70 }),
+      buildGardner(['logical', 'spatial', 'intrapersonal']),
       buildMbti('INTJ'),
       buildDisc('C')
     );
 
-    const mainClusterGroup = trace.stage1.mainGroup;
-    trace.finalOutput.alternativePaths.forEach((alt) => {
-      expect(alt.pathId).toBeDefined();
+    const mainScore = output.basket.mainPath.matchScore;
+    output.basket.alternativePaths.forEach((alt) => {
+      expect(mainScore).toBeGreaterThanOrEqual(alt.matchScore);
     });
   });
 
-  test('Scenario 25: Hybrid baseCluster allows tracks from both groups', () => {
-    // A profile with gap <= 10 between Math-Physics and Experimental
-    const holland = buildHolland({ R: 60, I: 95, A: 20, S: 30, E: 30, C: 50 });
-    const trace = runPathEngineWithTrace(holland, buildGardner(['logical', 'naturalistic']), null, null);
+  test('Scenario 3: Complementary paths explore strictly distinct cross-cluster opportunities (3 unique clusters, none from main cluster)', () => {
+    const output = runPathEngineV2(
+      buildHolland({ R: 40, I: 92, A: 30, S: 20, E: 35, C: 70 }),
+      buildGardner(['logical', 'spatial', 'intrapersonal']),
+      buildMbti('INTJ'),
+      buildDisc('C')
+    );
 
-    if (trace.stage1.mainGroup.length === 2) {
-      expect(trace.stage1.mainGroup.length).toBe(2);
-      expect(trace.finalOutput.allRecommendedPaths.length).toBe(7);
-    }
+    const mainClusterId = output.basket.mainPath.cluster.id;
+    expect(output.basket.complementaryPaths.length).toBe(3);
+
+    const compClusterIds = output.basket.complementaryPaths.map((p) => p.cluster.id);
+    const uniqueCompClusters = new Set(compClusterIds);
+
+    // Assert strictly 3 unique clusters among complementary paths
+    expect(uniqueCompClusters.size).toBe(3);
+
+    // Assert none of the complementary paths is from the main cluster
+    expect(uniqueCompClusters.has(mainClusterId)).toBe(false);
+
+    // Assert none of the complementary paths matches the main path jobId
+    output.basket.complementaryPaths.forEach((comp) => {
+      expect(comp.jobId).not.toBe(output.basket.mainPath.jobId);
+    });
   });
 });

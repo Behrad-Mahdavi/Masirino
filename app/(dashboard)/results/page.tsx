@@ -21,6 +21,7 @@ import {
   Layers,
   Sparkles,
   AlertCircle,
+  UserCheck,
 } from 'lucide-react';
 
 export default function ResultsPage() {
@@ -206,6 +207,38 @@ export default function ResultsPage() {
         </div>
       </div>
 
+      {/* Top 3 O*NET Career Clusters Section */}
+      {pathDna?.topCareerClusters && pathDna.topCareerClusters.length > 0 && (
+        <div className="bg-white border-thick border-ink-900 rounded-2xl p-6 md:p-8 elevated-lg space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Compass className="w-6 h-6 text-teal-700" />
+              <h2 className="text-xl font-black text-ink-900">۳ کلاستر شغلی منطبق با رغبت‌سنجی هالند (O*NET)</h2>
+            </div>
+            <Chip variant="badge" brand="rokad">شباهت کسینوسی</Chip>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {pathDna.topCareerClusters.map((cl, idx) => (
+              <div key={cl.clusterId} className="bg-teal-50/60 border border-teal-300 rounded-xl p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-full bg-teal-700 text-white text-xs font-black flex items-center justify-center font-numeric shrink-0">
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-bold text-ink-900 line-clamp-1">{cl.titleFa}</h4>
+                    <span className="text-[10px] text-ink-500 font-sans">{cl.titleEn}</span>
+                  </div>
+                </div>
+                <div className="text-left shrink-0">
+                  <span className="font-numeric text-sm font-black text-teal-800">{cl.affinityScore}٪</span>
+                  <span className="text-[9px] text-ink-500 block">قرابت</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Main Path Feature Card */}
       {pathDna?.mainPath && (
         <div className="bg-white border-thick border-ink-900 rounded-2xl p-6 md:p-8 elevated-xl space-y-6">
@@ -216,19 +249,44 @@ export default function ResultsPage() {
               </div>
               <div>
                 <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-500">
-                  اولیت اول — مسیر اصلی
+                  اولویت اول — مسیر شغلی اصلی
                 </span>
                 <h2 className="text-2xl md:text-3xl font-black text-ink-900 mt-1">{pathDna.mainPath.title}</h2>
               </div>
             </div>
 
             <div className="bg-amber-50 border-2 border-amber-500 rounded-xl px-4 py-2 text-center">
-              <span className="text-[10px] font-bold text-amber-800 block">درصد تطابق الگوریتمی</span>
+              <span className="text-[10px] font-bold text-amber-800 block">نمره سازگاری کل</span>
               <span className="font-numeric text-3xl font-black text-amber-600">{pathDna.mainPath.matchScore}٪</span>
             </div>
           </div>
 
           <p className="text-sm font-semibold text-ink-700 leading-relaxed">{pathDna.mainPath.description}</p>
+
+          {/* DISC In-Role Positioning Banner */}
+          {pathDna.v2Basket?.mainPath?.discPositioning && (
+            <div className="bg-amber-50/90 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-amber-700" />
+                  <span>پوزیشن و سبک عملیاتی درون شغل (تحلیل رفتاری DISC):</span>
+                </span>
+                <span className="text-xs font-black text-amber-900 bg-amber-200/90 px-3 py-1 rounded-lg">
+                  «{pathDna.v2Basket.mainPath.discPositioning.targetRoleTitle}»
+                </span>
+              </div>
+              <p className="text-xs text-amber-950 font-medium leading-relaxed">
+                {pathDna.v2Basket.mainPath.discPositioning.workStyleGuidance}
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {pathDna.v2Basket.mainPath.discPositioning.strengthsInRole?.map((st, i) => (
+                  <span key={i} className="text-[11px] bg-white px-2.5 py-0.5 rounded-md border border-amber-300 text-amber-900 font-bold shadow-xs">
+                    ✓ {st}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* High school & University majors */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -283,37 +341,42 @@ export default function ResultsPage() {
               <Layers className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-ink-900">۳ مسیر جایگزین (هم‌خانواده تحصیلی)</h2>
-              <p className="text-xs font-semibold text-ink-500">مسیرهای موازی در همان گروه تحصیلی با تمرکز متفاوت</p>
+              <h2 className="text-2xl font-black text-ink-900">۳ مسیر جایگزین (همان کلاستر تخصصی)</h2>
+              <p className="text-xs font-semibold text-ink-500">طرح پشتیبان با حفظ پایه رغبتی و تنوع در تخصص</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {pathDna.alternativePaths.map((path, idx) => (
-              <div key={idx} className="bg-neutral-50 border-thick border-ink-900 rounded-xl p-5 elevated-sm flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-numeric text-xs font-black text-navy-700 bg-navy-50 px-2 py-0.5 rounded-md border border-navy-400">
-                      تطابق: {path.matchScore}٪
-                    </span>
-                    <span className="text-[10px] font-bold text-ink-500 font-numeric">جایگزین ۰{idx + 1}</span>
-                  </div>
-                  <h3 className="text-base font-black text-ink-900 mb-2">{path.title}</h3>
-                  <p className="text-xs font-medium text-ink-500 leading-relaxed">{path.description}</p>
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-neutral-300">
-                  <span className="text-[11px] font-bold text-teal-800 block">رشته پیشنهادشده: {path.recommendedHighschoolTrack}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {path.exampleCareers.map((c, i) => (
-                      <span key={i} className="bg-white border border-neutral-300 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                        {c}
+            {pathDna.alternativePaths.map((path, idx) => {
+              const v2Alt = pathDna.v2Basket?.alternativePaths?.[idx];
+              return (
+                <div key={idx} className="bg-neutral-50 border-thick border-ink-900 rounded-xl p-5 elevated-sm flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-numeric text-xs font-black text-navy-700 bg-navy-50 px-2 py-0.5 rounded-md border border-navy-400">
+                        تطابق: {path.matchScore}٪
                       </span>
-                    ))}
+                      <span className="text-[10px] font-bold text-ink-500 font-numeric">جایگزین ۰{idx + 1}</span>
+                    </div>
+                    <h3 className="text-base font-black text-ink-900 mb-1">{path.title}</h3>
+                    <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded mb-2 inline-block">
+                      {path.category}
+                    </span>
+                    <p className="text-xs font-medium text-ink-500 leading-relaxed line-clamp-3">{path.description}</p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-neutral-300">
+                    {v2Alt?.discPositioning?.targetRoleTitle && (
+                      <div className="bg-amber-100/60 text-amber-900 text-[11px] font-bold p-2 rounded-lg border border-amber-300">
+                        <span className="block text-[10px] text-amber-700">پوزیشن رفتاری DISC:</span>
+                        «{v2Alt.discPositioning.targetRoleTitle}»
+                      </div>
+                    )}
+                    <span className="text-[11px] font-bold text-teal-800 block">رشته پیشنهادی: {path.recommendedHighschoolTrack}</span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -326,37 +389,42 @@ export default function ResultsPage() {
               <Compass className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-ink-900">۳ مسیر مکمل (میان‌رشته‌ای / گروه متفاوت)</h2>
-              <p className="text-xs font-semibold text-ink-500">فرصت‌های شغلی ارزشمند از گروه‌های تحصیلی جایگزین</p>
+              <h2 className="text-2xl font-black text-ink-900">۳ مسیر مکمل و خلاقانه (میان‌رشته‌ای / کلاستر متقاطع)</h2>
+              <p className="text-xs font-semibold text-ink-500">تلفیق هوش‌های ثانویه گاردنر و فرصت‌های نوظهور شغلی</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {pathDna.complementaryPaths.map((path, idx) => (
-              <div key={idx} className="bg-neutral-50 border-thick border-ink-900 rounded-xl p-5 elevated-sm flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-numeric text-xs font-black text-pink-700 bg-pink-50 px-2 py-0.5 rounded-md border border-pink-400">
-                      تطابق: {path.matchScore}٪
-                    </span>
-                    <span className="text-[10px] font-bold text-ink-500 font-numeric">مکمل ۰{idx + 1}</span>
-                  </div>
-                  <h3 className="text-base font-black text-ink-900 mb-2">{path.title}</h3>
-                  <p className="text-xs font-medium text-ink-500 leading-relaxed">{path.description}</p>
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-neutral-300">
-                  <span className="text-[11px] font-bold text-pink-800 block">رشته پیشنهادی: {path.recommendedHighschoolTrack}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {path.exampleCareers.map((c, i) => (
-                      <span key={i} className="bg-white border border-neutral-300 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                        {c}
+            {pathDna.complementaryPaths.map((path, idx) => {
+              const v2Comp = pathDna.v2Basket?.complementaryPaths?.[idx];
+              return (
+                <div key={idx} className="bg-neutral-50 border-thick border-ink-900 rounded-xl p-5 elevated-sm flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-numeric text-xs font-black text-pink-700 bg-pink-50 px-2 py-0.5 rounded-md border border-pink-400">
+                        تطابق: {path.matchScore}٪
                       </span>
-                    ))}
+                      <span className="text-[10px] font-bold text-ink-500 font-numeric">مکمل ۰{idx + 1}</span>
+                    </div>
+                    <h3 className="text-base font-black text-ink-900 mb-1">{path.title}</h3>
+                    <span className="text-[10px] text-pink-700 font-bold bg-pink-50 px-2 py-0.5 rounded mb-2 inline-block">
+                      {path.category}
+                    </span>
+                    <p className="text-xs font-medium text-ink-500 leading-relaxed line-clamp-3">{path.description}</p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-neutral-300">
+                    {v2Comp?.discPositioning?.targetRoleTitle && (
+                      <div className="bg-amber-100/60 text-amber-900 text-[11px] font-bold p-2 rounded-lg border border-amber-300">
+                        <span className="block text-[10px] text-amber-700">پوزیشن رفتاری DISC:</span>
+                        «{v2Comp.discPositioning.targetRoleTitle}»
+                      </div>
+                    )}
+                    <span className="text-[11px] font-bold text-pink-800 block">رشته پیشنهادی: {path.recommendedHighschoolTrack}</span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

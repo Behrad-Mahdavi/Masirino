@@ -1,38 +1,41 @@
-import {
-  PATH_DATABASE,
-  TVET_INDUSTRY_SUBFIELDS,
-  TVET_ARTS_SUBFIELDS,
-} from '../pathEngineTables';
-import { GARDNER_VALID_KEYS } from '../debug/validateInput';
+import { ONET_CAREER_CLUSTERS, ONET_CAREER_DATABASE } from '../pathEngineTables';
 
-describe('Database Content Coverage', () => {
-  test('Scenario 26: TVET subfields are covered in PATH_DATABASE', () => {
-    const allCompatibleTracks = new Set(PATH_DATABASE.flatMap((p) => p.compatibleTracks));
-    const allIndustrySubfields = Object.keys(TVET_INDUSTRY_SUBFIELDS);
-    const allArtsSubfields = Object.keys(TVET_ARTS_SUBFIELDS);
-
-    const missingIndustry = allIndustrySubfields.filter((sub) => !allCompatibleTracks.has(sub));
-    const missingArts = allArtsSubfields.filter((sub) => !allCompatibleTracks.has(sub));
-
-    // Log missing ones for content team visibility if any
-    if (missingIndustry.length > 0) {
-      console.warn('Subfields in Industry not in any path:', missingIndustry);
-    }
-    if (missingArts.length > 0) {
-      console.warn('Subfields in Arts not in any path:', missingArts);
-    }
-
-    // Verify that at least the majority of subfields are linked
-    expect(allCompatibleTracks.size).toBeGreaterThan(15);
+describe('O*NET Database Integrity & Psychometric Coverage', () => {
+  test('Scenario 1: 20 Standard O*NET Macro Clusters are defined', () => {
+    const clusterKeys = Object.keys(ONET_CAREER_CLUSTERS);
+    expect(clusterKeys.length).toBe(20);
   });
 
-  test('Scenario 27: Every path in PATH_DATABASE has valid Gardner weights', () => {
-    PATH_DATABASE.forEach((path) => {
-      const keys = Object.keys(path.gardnerWeights);
-      expect(keys.length).toBeGreaterThan(0);
+  test('Scenario 2: Every O*NET career has valid RIASEC, Gardner, Environment vectors and 4 DISC roles', () => {
+    expect(ONET_CAREER_DATABASE.length).toBeGreaterThan(0);
 
-      const hasValidKey = keys.some((k) => GARDNER_VALID_KEYS.includes(k));
-      expect(hasValidKey).toBe(true);
+    ONET_CAREER_DATABASE.forEach((job) => {
+      // 1. RIASEC
+      expect(job.riasecVector.R).toBeGreaterThanOrEqual(0);
+      expect(job.riasecVector.I).toBeGreaterThanOrEqual(0);
+      expect(job.riasecVector.A).toBeGreaterThanOrEqual(0);
+      expect(job.riasecVector.S).toBeGreaterThanOrEqual(0);
+      expect(job.riasecVector.E).toBeGreaterThanOrEqual(0);
+      expect(job.riasecVector.C).toBeGreaterThanOrEqual(0);
+
+      // 2. Gardner
+      expect(job.gardnerWeights.logical).toBeDefined();
+      expect(job.gardnerWeights.spatial).toBeDefined();
+      expect(job.gardnerWeights.linguistic).toBeDefined();
+
+      // 3. Work Environment 6D
+      expect(job.workEnvironment.structure).toBeGreaterThanOrEqual(0);
+      expect(job.workEnvironment.social).toBeGreaterThanOrEqual(0);
+      expect(job.workEnvironment.autonomy).toBeGreaterThanOrEqual(0);
+      expect(job.workEnvironment.pace).toBeGreaterThanOrEqual(0);
+      expect(job.workEnvironment.analytical_vs_valuebased).toBeGreaterThanOrEqual(0);
+      expect(job.workEnvironment.competitiveness).toBeGreaterThanOrEqual(0);
+
+      // 4. DISC Roles (D, I, S, C)
+      expect(job.discRoles.D.roleTitle).toBeTruthy();
+      expect(job.discRoles.I.roleTitle).toBeTruthy();
+      expect(job.discRoles.S.roleTitle).toBeTruthy();
+      expect(job.discRoles.C.roleTitle).toBeTruthy();
     });
   });
 });

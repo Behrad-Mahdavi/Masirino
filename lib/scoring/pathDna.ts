@@ -2,7 +2,12 @@ import { HollandResult } from './holland';
 import { GardnerResult } from './gardner';
 import { MbtiResult } from './mbti';
 import { DiscResult } from './disc';
-import { runPathEngine, PathEngineOutput, PathRecommendation } from './pathEngine';
+import {
+  runPathEngineWithTrace,
+  PathRecommendation,
+  PathRecommendationResult,
+  PathEngineOutputV2,
+} from './pathEngine';
 
 export interface PathDnaProfile {
   hollandCode: string;
@@ -15,10 +20,22 @@ export interface PathDnaProfile {
     matchScore: number;
     suitableRoles: string[];
   }[];
+  topCareerClusters: {
+    clusterId: string;
+    titleFa: string;
+    titleEn: string;
+    affinityScore: number;
+  }[];
   mainPath: PathRecommendation;
   alternativePaths: PathRecommendation[];
   complementaryPaths: PathRecommendation[];
   allRecommendedPaths: PathRecommendation[];
+  v2Basket: {
+    mainPath: PathRecommendationResult;
+    alternativePaths: PathRecommendationResult[];
+    complementaryPaths: PathRecommendationResult[];
+  };
+  v2Output: PathEngineOutputV2;
   completenessWarning: string | null;
   baseCluster: {
     mainGroup: string[];
@@ -33,11 +50,11 @@ export function computePathDna(
   mbti: MbtiResult | null,
   disc: DiscResult | null
 ): PathDnaProfile {
-  // Execute the 5-stage Path Engine from Pathenginelogic.MD
-  const engineOutput: PathEngineOutput = runPathEngine(holland, gardner, mbti, disc);
+  // Execute the V2 Path Engine with O*NET and 4-phase funnel
+  const { finalOutput, v2Output } = runPathEngineWithTrace(holland, gardner, mbti, disc);
 
   // Map 7-path outputs to careerClusters for legacy view compatibility
-  const careerClusters = engineOutput.allRecommendedPaths.map((p) => ({
+  const careerClusters = finalOutput.allRecommendedPaths.map((p) => ({
     title: p.title,
     description: p.description,
     matchScore: p.matchScore,
@@ -50,12 +67,15 @@ export function computePathDna(
     mbtiType: mbti?.type || '---',
     discProfile: disc?.profile || '---',
     careerClusters,
-    mainPath: engineOutput.mainPath,
-    alternativePaths: engineOutput.alternativePaths,
-    complementaryPaths: engineOutput.complementaryPaths,
-    allRecommendedPaths: engineOutput.allRecommendedPaths,
-    completenessWarning: engineOutput.completenessWarning,
-    baseCluster: engineOutput.baseCluster,
-    computedAt: engineOutput.computedAt,
+    topCareerClusters: v2Output.topCareerClusters,
+    mainPath: finalOutput.mainPath,
+    alternativePaths: finalOutput.alternativePaths,
+    complementaryPaths: finalOutput.complementaryPaths,
+    allRecommendedPaths: finalOutput.allRecommendedPaths,
+    v2Basket: v2Output.basket,
+    v2Output,
+    completenessWarning: finalOutput.completenessWarning,
+    baseCluster: finalOutput.baseCluster,
+    computedAt: finalOutput.computedAt,
   };
 }

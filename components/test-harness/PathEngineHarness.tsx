@@ -2,133 +2,319 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  runPathEngineWithTrace,
-  PathEngineTrace,
-  Stage1Trace,
-  Stage2Trace,
-  Stage3Trace,
-  Stage4Trace,
-  Stage4bTrace,
-  Stage5Trace,
+  runPathEngineV2,
+  PathEngineOutputV2,
+  PathRecommendationResult,
 } from '@/lib/scoring/pathEngine';
 import {
-  MainGroups,
-  PATH_DATABASE,
-  MAIN_GROUPS_VECTORS,
-  TVET_INDUSTRY_SUBFIELDS,
-  TVET_ARTS_SUBFIELDS,
+  ONET_CAREER_CLUSTERS,
+  ONET_CAREER_DATABASE,
 } from '@/lib/scoring/pathEngineTables';
 import { GARDNER_VALID_KEYS } from '@/src/pathEngine/debug/validateInput';
 import {
-  Play,
-  RotateCcw,
-  Sliders,
-  Eye,
-  CheckCircle2,
-  AlertTriangle,
-  Layers,
-  Compass,
-  Brain,
-  UserCheck,
   Sparkles,
   Copy,
   Check,
-  Activity,
-  FileText,
+  Compass,
+  Brain,
+  Zap,
+  UserCheck,
+  Briefcase,
+  Layers,
   Search,
+  CheckCircle2,
   ArrowRight,
   Award,
-  Zap,
+  BarChart3,
+  ExternalLink,
+  Tag,
+  ShieldCheck,
   Info,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 
 // Preset Scenarios
-const PRESETS = [
+interface PresetScenario {
+  id: string;
+  category: 'cluster' | 'edge_case';
+  title: string;
+  desc: string;
+  badge?: string;
+  toggles?: { holland?: boolean; gardner?: boolean; mbti?: boolean; disc?: boolean };
+  holland: { R: number; I: number; A: number; S: number; E: number; C: number };
+  gardner: string[];
+  mbti: { type: string; certainty: [number, number, number, number] };
+  disc: 'D' | 'I' | 'S' | 'C';
+}
+
+const PRESETS: PresetScenario[] = [
+  // --- دسته ۱: کلاسترهای شاخص O*NET ---
   {
-    id: 'default',
-    title: 'مهندسی و داده (INTJ / R:40, I:85, C:65 / C)',
-    desc: 'ورودی استاندارد بریف فنی با گرایش تحلیلی و فناوری',
-    holland: { R: 40, I: 85, A: 25, S: 20, E: 30, C: 65 },
+    id: 'ai-software',
+    category: 'cluster',
+    title: 'توسعه هوش مصنوعی و نرم‌افزار (INTJ / I:90, C:75 / D)',
+    desc: 'رغبت تحلیلی و قراردادی بسیار بالا، هوش منطقی و تیپ متمرکز',
+    badge: 'فناوری و AI',
+    holland: { R: 40, I: 92, A: 30, S: 20, E: 35, C: 70 },
     gardner: ['logical', 'spatial', 'intrapersonal'],
-    mbti: { type: 'INTJ', certainty: [70, 60, 80, 55] as [number, number, number, number] },
-    disc: 'C',
-  },
-  {
-    id: 'math-pure',
-    title: 'ریاضی‌فیزیک محض (مهندسی برق و مکانیک)',
-    desc: 'نمرات بسیار بالای تحلیلی، فضایی و ساختارمند',
-    holland: { R: 75, I: 95, A: 15, S: 10, E: 45, C: 80 },
-    gardner: ['logical', 'spatial', 'bodily'],
-    mbti: { type: 'ISTJ', certainty: [85, 75, 90, 80] as [number, number, number, number] },
-    disc: 'CD',
-  },
-  {
-    id: 'medical-science',
-    title: 'علوم تجربی و پزشکی / دندان‌پزشکی',
-    desc: 'هوش طبیعت‌گرا، تحلیل زیستی و تعامل درمانی',
-    holland: { R: 35, I: 95, A: 20, S: 70, E: 25, C: 65 },
-    gardner: ['naturalistic', 'logical', 'interpersonal'],
-    mbti: { type: 'INFJ', certainty: [65, 80, 75, 70] as [number, number, number, number] },
-    disc: 'SC',
-  },
-  {
-    id: 'tvet-industry',
-    title: 'فنی‌وحرفه‌ای صنعت (مکاترونیک و خودرو)',
-    desc: 'هوش حرکتی و بدنی، کارگاهی، واقع‌گرا (R) بالا',
-    holland: { R: 95, I: 50, A: 15, S: 10, E: 25, C: 65 },
-    gardner: ['bodily', 'spatial', 'logical'],
-    mbti: { type: 'ISTP', certainty: [80, 90, 85, 85] as [number, number, number, number] },
+    mbti: { type: 'INTJ', certainty: [80, 75, 85, 70] },
     disc: 'D',
   },
   {
-    id: 'tvet-arts',
-    title: 'فنی‌وحرفه‌ای هنر (سینما، گرافیک، طراحی)',
-    desc: 'نمره هنر (A) بسیار بالا، خلاقیت دیداری و فضایی',
-    holland: { R: 20, I: 40, A: 95, S: 50, E: 40, C: 25 },
-    gardner: ['spatial', 'musical', 'linguistic'],
-    mbti: { type: 'INFP', certainty: [75, 85, 90, 80] as [number, number, number, number] },
+    id: 'clinical-medical',
+    category: 'cluster',
+    title: 'پزشکی و سلامت بالینی (INFJ / I:95, S:80 / S)',
+    desc: 'هوش طبیعت‌گرا، تحلیل زیستی و تعامل درمانی عمیق',
+    badge: 'سلامت و درمان',
+    holland: { R: 40, I: 95, A: 20, S: 80, E: 30, C: 65 },
+    gardner: ['naturalistic', 'logical', 'interpersonal'],
+    mbti: { type: 'INFJ', certainty: [70, 80, 75, 75] },
+    disc: 'S',
+  },
+  {
+    id: 'business-strategy',
+    category: 'cluster',
+    title: 'مدیریت استراتژیک و کارآفرینی (ENTJ / E:95, S:65 / D)',
+    desc: 'هوش کلامی، برون‌گرایی، رهبری جسورانه و تصمیم‌گیری قاطع',
+    badge: 'مدیریت و تجارت',
+    holland: { R: 20, I: 60, A: 35, S: 65, E: 96, C: 55 },
+    gardner: ['linguistic', 'interpersonal', 'logical'],
+    mbti: { type: 'ENTJ', certainty: [85, 70, 85, 90] },
+    disc: 'D',
+  },
+  {
+    id: 'digital-design',
+    category: 'cluster',
+    title: 'طراحی محصول دیجیتال و UI/UX (ENFP / A:92, S:55 / I)',
+    desc: 'هوش فضایی و اجتماعی، خلاقیت دیداری و داستان‌سرایی کاربر',
+    badge: 'هنر و دیزاین',
+    holland: { R: 35, I: 60, A: 92, S: 50, E: 50, C: 45 },
+    gardner: ['spatial', 'interpersonal', 'logical'],
+    mbti: { type: 'ENFP', certainty: [75, 85, 80, 75] },
     disc: 'I',
   },
   {
-    id: 'humanities-law',
-    title: 'علوم‌انسانی و حقوق / مدیریت و کسب‌وکار',
-    desc: 'هوش کلامی و اجتماعی، برون‌گرایی و مذاکره',
-    holland: { R: 10, I: 65, A: 50, S: 90, E: 85, C: 50 },
-    gardner: ['linguistic', 'interpersonal', 'logical'],
-    mbti: { type: 'ENTJ', certainty: [85, 70, 85, 90] as [number, number, number, number] },
-    disc: 'DI',
+    id: 'law-arbitration',
+    category: 'cluster',
+    title: 'وکالت و داوری حقوقی (ENTP / I:80, E:90 / C)',
+    desc: 'هوش کلامی و منطقی، استدلال تحلیلی و فن بیان نافذ',
+    badge: 'حقوق و قضا',
+    holland: { R: 10, I: 80, A: 45, S: 65, E: 90, C: 65 },
+    gardner: ['linguistic', 'logical', 'interpersonal'],
+    mbti: { type: 'ENTP', certainty: [80, 85, 80, 75] },
+    disc: 'C',
   },
   {
-    id: 'paradox-case',
-    title: 'کیس پیچیده و متناقض (تضاد MBTI با DISC)',
-    desc: 'شخصیت عمل‌گرای ریسک‌پذیر ESTP با DISC محافظه‌کار SC',
-    holland: { R: 60, I: 60, A: 60, S: 60, E: 60, C: 60 },
-    gardner: ['spatial', 'logical', 'interpersonal'],
-    mbti: { type: 'ESTP', certainty: [80, 80, 80, 80] as [number, number, number, number] },
-    disc: 'SC',
+    id: 'applied-tech',
+    category: 'cluster',
+    title: 'تکنسین مکاترونیک و خودرو (ISTP / R:95, C:65 / D)',
+    desc: 'هوش بدنی-حرکتی و فضایی، عیب‌یابی عملیاتی و مکانیکی',
+    badge: 'فنی و مهندسی',
+    holland: { R: 96, I: 60, A: 10, S: 20, E: 20, C: 65 },
+    gardner: ['bodily', 'spatial', 'logical'],
+    mbti: { type: 'ISTP', certainty: [85, 90, 85, 80] },
+    disc: 'D',
+  },
+  {
+    id: 'finance-investment',
+    category: 'cluster',
+    title: 'تحلیل مالی، بانکداری و بورس (INTJ / I:80, C:95 / C)',
+    desc: 'تحلیل اعداد، محاسبات کمی و مدیریت ریسک سرمایه‌گذاری',
+    badge: 'مالی و اقتصاد',
+    holland: { R: 15, I: 80, A: 15, S: 25, E: 75, C: 95 },
+    gardner: ['logical', 'intrapersonal', 'linguistic'],
+    mbti: { type: 'INTJ', certainty: [85, 80, 90, 85] },
+    disc: 'C',
+  },
+  {
+    id: 'music-audio',
+    category: 'cluster',
+    title: 'آهنگسازی و تولید موسیقی (INFP / A:96, I:45 / I)',
+    desc: 'هوش برتر موسیقی، خلق ملودی و فضاسازی عاطفی صوت',
+    badge: 'موسیقی و صدا',
+    holland: { R: 35, I: 45, A: 96, S: 35, E: 35, C: 35 },
+    gardner: ['musical', 'intrapersonal', 'spatial'],
+    mbti: { type: 'INFP', certainty: [80, 75, 85, 70] },
+    disc: 'I',
+  },
+  {
+    id: 'agritech-green',
+    category: 'cluster',
+    title: 'کشاورزی هوشمند و انرژی پاک (ISTJ / R:88, I:80 / S)',
+    desc: 'هوش طبیعت‌گرا و منطقی، توسعه کشت نوین و انرژی خورشیدی',
+    badge: 'محیط‌زیست و انرژی',
+    holland: { R: 88, I: 80, A: 20, S: 35, E: 40, C: 60 },
+    gardner: ['naturalistic', 'logical', 'spatial'],
+    mbti: { type: 'ISTJ', certainty: [75, 85, 80, 80] },
+    disc: 'S',
+  },
+  {
+    id: 'linguistics-diplomacy',
+    category: 'cluster',
+    title: 'مترجمی همزمان و زبان‌شناسی (ENFJ / I:75, A:75 / I)',
+    desc: 'هوش کلامی و بین‌فردی فوق‌العاده، مذاکرات چندزبانه',
+    badge: 'زبان و دیپلماسی',
+    holland: { R: 10, I: 75, A: 75, S: 75, E: 60, C: 50 },
+    gardner: ['linguistic', 'interpersonal', 'intrapersonal'],
+    mbti: { type: 'ENFJ', certainty: [85, 75, 80, 75] },
+    disc: 'I',
+  },
+
+  // --- دسته ۲: سناریوهای مرزی و استرس‌تست (Scenarios 9-28) ---
+  {
+    id: 'scenario-9-baseline',
+    category: 'edge_case',
+    title: '⚠️ سناریو ۹: خط پایه کامل (هر ۴ تست غیرفعال / Null)',
+    desc: 'بررسی فعال شدن فالبک‌های پیش‌فرض 0.75 و 0.85 و هشدار completenessWarning',
+    badge: 'Baseline 4x Null',
+    toggles: { holland: false, gardner: false, mbti: false, disc: false },
+    holland: { R: 50, I: 50, A: 50, S: 50, E: 50, C: 50 },
+    gardner: ['logical', 'spatial', 'linguistic'],
+    mbti: { type: 'INTJ', certainty: [50, 50, 50, 50] },
+    disc: 'D',
+  },
+  {
+    id: 'scenario-10-holland-only',
+    category: 'edge_case',
+    title: '📄 سناریو ۱۰: تک‌آزمون (فقط هولند فعال، بقیه Null)',
+    desc: 'سنجش نمره سازگاری زمانی که تنها یک آزمون تکمیل شده است',
+    badge: 'Single Test',
+    toggles: { holland: true, gardner: false, mbti: false, disc: false },
+    holland: { R: 88, I: 40, A: 15, S: 15, E: 30, C: 55 },
+    gardner: ['logical', 'spatial', 'linguistic'],
+    mbti: { type: 'INTJ', certainty: [50, 50, 50, 50] },
+    disc: 'D',
+  },
+  {
+    id: 'scenario-11-zero-vector',
+    category: 'edge_case',
+    title: '⭕ سناریو ۱۱: بردار صفر مطلق هولند (همه ابعاد ۰)',
+    desc: 'تست ایمنی تقسیم بر صفر در فرمول شباهت کسینوسی و جلوگیری از NaN',
+    badge: 'Zero Vector',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 0, I: 0, A: 0, S: 0, E: 0, C: 0 },
+    gardner: ['logical', 'spatial', 'linguistic'],
+    mbti: { type: 'INTJ', certainty: [50, 50, 50, 50] },
+    disc: 'D',
+  },
+  {
+    id: 'scenario-15-neutral-mbti',
+    category: 'edge_case',
+    title: '⚖️ سناریو ۱۵: تیپ MBTI خنثی ۵۰/۵۰ (XXXX)',
+    desc: 'ارزیابی رفتار موتور در برابر کاربران کاملاً مردد و تطابق با هدف ۵۰',
+    badge: 'Neutral MBTI',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 40, I: 88, A: 35, S: 15, E: 30, C: 70 },
+    gardner: ['logical', 'spatial', 'linguistic'],
+    mbti: { type: 'XXXX', certainty: [0, 0, 0, 0] },
+    disc: 'D',
+  },
+  {
+    id: 'scenario-16-max-mbti-penalty',
+    category: 'edge_case',
+    title: '💥 سناریو ۱۶: تضاد ۱۰۰٪ MBTI با محیط کار (حداکثر جریمه)',
+    desc: 'تست کف فرمول Math.max(0.1, ...) و مقاومت سیستم در برابر تعارض محیطی',
+    badge: 'Max Penalty',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 95, I: 20, A: 10, S: 10, E: 15, C: 30 },
+    gardner: ['bodily', 'spatial', 'naturalistic'],
+    mbti: { type: 'ENFP', certainty: [100, 100, 100, 100] },
+    disc: 'D',
+  },
+  {
+    id: 'peak-alignment-21',
+    category: 'edge_case',
+    title: '🎯 سناریو ۲۱: همسویی ۱۰۰٪ تمام ۴ آزمون (سقف نمره)',
+    desc: 'هولند تحلیلی، گاردنر منطقی/فضایی، MBTI با INTJ و DISC تحلیلی C',
+    badge: 'Peak Match (95%+)',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 40, I: 88, A: 35, S: 15, E: 30, C: 70 },
+    gardner: ['logical', 'spatial', 'intrapersonal'],
+    mbti: { type: 'INTJ', certainty: [90, 85, 92, 88] },
+    disc: 'C',
+  },
+  {
+    id: 'holland-gardner-conflict-22',
+    category: 'edge_case',
+    title: '⚡ سناریو ۲۲: تضاد کامل هولند فنی با گاردنر هنری/بدنی',
+    desc: 'رغبت‌های RIASEC فنی/مکانیکی در تقابل با هوش‌های برتر موسیقی/حرکتی',
+    badge: 'RIASEC vs Gardner',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 90, I: 85, A: 10, S: 10, E: 20, C: 60 },
+    gardner: ['musical', 'bodily', 'interpersonal'],
+    mbti: { type: 'ISTJ', certainty: [50, 50, 50, 50] },
+    disc: 'D',
+  },
+  {
+    id: 'scenario-26-out-of-bounds',
+    category: 'edge_case',
+    title: '📈 سناریو ۲۶: نمرات خارج از بازه مجاز (بیش از ۱۰۰)',
+    desc: 'تست پایداری الگوریتم و کلمپ خروجی در برابر داده‌های ورودی ناهنجار',
+    badge: 'Out of Bounds',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 150, I: 200, A: 0, S: 0, E: 50, C: 50 },
+    gardner: ['logical', 'spatial', 'linguistic'],
+    mbti: { type: 'INTJ', certainty: [80, 80, 80, 80] },
+    disc: 'D',
+  },
+  {
+    id: 'mbti-disc-tension-27',
+    category: 'edge_case',
+    title: '⚖️ سناریو ۲۷: تناقض DISC حمایتی (S) با MBTI رقابتی (ENTJ)',
+    desc: 'ارزیابی رفتار موتور در تقابل تیپ شخصیتی با پوزیشنینگ تیمی',
+    badge: 'DISC vs MBTI',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 15, I: 75, A: 15, S: 25, E: 70, C: 95 },
+    gardner: ['logical', 'linguistic', 'interpersonal'],
+    mbti: { type: 'ENTJ', certainty: [90, 80, 95, 85] },
+    disc: 'S',
+  },
+  {
+    id: 'full-stress-28',
+    category: 'edge_case',
+    title: '🔥 سناریو ۲۸: استرس تست کامل (۴ سیگنال متناقض)',
+    desc: 'هولند به شدت هنری (A:96)، گاردنر منطقی، MBTI احساسی (INFP)، DISC قاطع (D)',
+    badge: 'Stress Test',
+    toggles: { holland: true, gardner: true, mbti: true, disc: true },
+    holland: { R: 10, I: 20, A: 96, S: 30, E: 25, C: 20 },
+    gardner: ['logical', 'linguistic', 'interpersonal'],
+    mbti: { type: 'INFP', certainty: [70, 60, 75, 55] },
+    disc: 'D',
   },
 ];
 
+const GARDNER_LABELS: Record<string, string> = {
+  logical: 'منطقی-ریاضی',
+  spatial: 'فضایی-دیداری',
+  linguistic: 'کلامی-زبانی',
+  interpersonal: 'بین‌فردی (اجتماعی)',
+  intrapersonal: 'درون‌فردی (خودآگاهی)',
+  bodily: 'بدنی-حرکتی',
+  musical: 'موسیقی و ریتم',
+  naturalistic: 'طبیعت‌گرا',
+};
+
 export const PathEngineHarness: React.FC = () => {
-  // Test Inclusion Toggles
+  // Test Toggles
   const [includeHolland, setIncludeHolland] = useState(true);
   const [includeGardner, setIncludeGardner] = useState(true);
   const [includeMbti, setIncludeMbti] = useState(true);
   const [includeDisc, setIncludeDisc] = useState(true);
 
+  // Preset Filter Tab
+  const [presetFilter, setPresetFilter] = useState<'all' | 'cluster' | 'edge_case'>('all');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('ai-software');
+
   // Holland State
   const [hollandScores, setHollandScores] = useState({
     R: 40,
-    I: 85,
-    A: 25,
+    I: 92,
+    A: 30,
     S: 20,
-    E: 30,
-    C: 65,
+    E: 35,
+    C: 70,
   });
 
-  // Gardner State
+  // Gardner State (Top 3 ordered)
   const [selectedGardner, setSelectedGardner] = useState<string[]>([
     'logical',
     'spatial',
@@ -136,62 +322,84 @@ export const PathEngineHarness: React.FC = () => {
   ]);
 
   // MBTI State
-  const [mbtiEI, setMbtiEI] = useState<'E' | 'I' | 'X'>('I');
-  const [mbtiSN, setMbtiSN] = useState<'S' | 'N' | 'X'>('N');
-  const [mbtiTF, setMbtiTF] = useState<'T' | 'F' | 'X'>('T');
-  const [mbtiJP, setMbtiJP] = useState<'J' | 'P' | 'X'>('J');
-  const [certaintyEI, setCertaintyEI] = useState(70);
-  const [certaintySN, setCertaintySN] = useState(60);
-  const [certaintyTF, setCertaintyTF] = useState(80);
-  const [certaintyJP, setCertaintyJP] = useState(55);
+  const [mbtiEI, setMbtiEI] = useState<'E' | 'I'>('I');
+  const [mbtiSN, setMbtiSN] = useState<'S' | 'N'>('N');
+  const [mbtiTF, setMbtiTF] = useState<'T' | 'F'>('T');
+  const [mbtiJP, setMbtiJP] = useState<'J' | 'P'>('J');
+  const [certaintyEI, setCertaintyEI] = useState(80);
+  const [certaintySN, setCertaintySN] = useState(75);
+  const [certaintyTF, setCertaintyTF] = useState(85);
+  const [certaintyJP, setCertaintyJP] = useState(70);
 
   // DISC State
-  const [discProfile, setDiscProfile] = useState('C');
+  const [discProfile, setDiscProfile] = useState<'D' | 'I' | 'S' | 'C'>('D');
 
-  // UI Active Stage Tab
-  const [activeStageTab, setActiveStageTab] = useState<'summary' | 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'stage5' | 'json'>('summary');
+  // UI State
+  const [activeTab, setActiveTab] = useState<'summary' | 'clusters' | 'allJobs' | 'json'>('summary');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedJson, setCopiedJson] = useState(false);
-  const [selectedPathForStage3, setSelectedPathForStage3] = useState<string | null>(null);
 
   // Apply Preset
-  const applyPreset = (preset: typeof PRESETS[0]) => {
-    setIncludeHolland(true);
-    setIncludeGardner(true);
-    setIncludeMbti(true);
-    setIncludeDisc(true);
+  const applyPreset = (preset: PresetScenario) => {
+    setSelectedPresetId(preset.id);
+    if (preset.toggles) {
+      setIncludeHolland(preset.toggles.holland ?? true);
+      setIncludeGardner(preset.toggles.gardner ?? true);
+      setIncludeMbti(preset.toggles.mbti ?? true);
+      setIncludeDisc(preset.toggles.disc ?? true);
+    } else {
+      setIncludeHolland(true);
+      setIncludeGardner(true);
+      setIncludeMbti(true);
+      setIncludeDisc(true);
+    }
 
     setHollandScores(preset.holland);
     setSelectedGardner(preset.gardner);
-
-    const mbtiType = preset.mbti.type;
-    setMbtiEI((mbtiType[0] as any) || 'X');
-    setMbtiSN((mbtiType[1] as any) || 'X');
-    setMbtiTF((mbtiType[2] as any) || 'X');
-    setMbtiJP((mbtiType[3] as any) || 'X');
-
+    setMbtiEI((preset.mbti.type[0] as 'E' | 'I') || 'I');
+    setMbtiSN((preset.mbti.type[1] as 'S' | 'N') || 'N');
+    setMbtiTF((preset.mbti.type[2] as 'T' | 'F') || 'T');
+    setMbtiJP((preset.mbti.type[3] as 'J' | 'P') || 'J');
     setCertaintyEI(preset.mbti.certainty[0]);
     setCertaintySN(preset.mbti.certainty[1]);
     setCertaintyTF(preset.mbti.certainty[2]);
     setCertaintyJP(preset.mbti.certainty[3]);
-
-    setDiscProfile(preset.disc);
+    setDiscProfile(preset.disc as any);
   };
 
-  // Run Path Engine Realtime Calculation
-  const trace: PathEngineTrace = useMemo(() => {
+  // Toggle Gardner Item
+  const handleToggleGardner = (key: string) => {
+    if (selectedGardner.includes(key)) {
+      setSelectedGardner(selectedGardner.filter((k) => k !== key));
+    } else {
+      if (selectedGardner.length < 3) {
+        setSelectedGardner([...selectedGardner, key]);
+      } else {
+        setSelectedGardner([selectedGardner[1], selectedGardner[2], key]);
+      }
+    }
+  };
+
+  // Engine Output Calculation
+  const v2Output: PathEngineOutputV2 = useMemo(() => {
     const hollandData = includeHolland
       ? {
           scores: hollandScores,
           normalizedScores: hollandScores,
-          code: '',
-          primaryDimension: 'R' as any,
+          code: 'RIA',
+          primaryDimension: 'R',
         }
       : null;
 
     const gardnerData = includeGardner
       ? {
           topIntelligences: selectedGardner,
+          strongIntelligences: selectedGardner,
+          scores: {
+            [selectedGardner[0] || 'logical']: 4.8,
+            [selectedGardner[1] || 'spatial']: 4.2,
+            [selectedGardner[2] || 'linguistic']: 3.8,
+          },
         }
       : null;
 
@@ -213,7 +421,7 @@ export const PathEngineHarness: React.FC = () => {
         }
       : null;
 
-    return runPathEngineWithTrace(hollandData as any, gardnerData as any, mbtiData as any, discData as any);
+    return runPathEngineV2(hollandData as any, gardnerData as any, mbtiData as any, discData as any);
   }, [
     includeHolland,
     includeGardner,
@@ -233,37 +441,43 @@ export const PathEngineHarness: React.FC = () => {
   ]);
 
   const copyJsonTrace = () => {
-    navigator.clipboard.writeText(JSON.stringify(trace, null, 2));
+    navigator.clipboard.writeText(JSON.stringify(v2Output, null, 2));
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 2000);
   };
 
-  // Filtered Stage 2 Paths
-  const filteredStage2 = useMemo(() => {
-    let list = [...trace.stage2].sort((a, b) => b.stage2Score - a.stage2Score);
+  // Filtered Career Catalog
+  const filteredAllJobs = useMemo(() => {
+    let list = [...v2Output.allPathsRanked];
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter((p) => p.title.toLowerCase().includes(q) || p.pathId.toLowerCase().includes(q));
+      list = list.filter(
+        (p) =>
+          p.titleFa.toLowerCase().includes(q) ||
+          p.titleEn.toLowerCase().includes(q) ||
+          p.cluster.titleFa.toLowerCase().includes(q) ||
+          p.onetCode.toLowerCase().includes(q)
+      );
     }
     return list;
-  }, [trace.stage2, searchQuery]);
+  }, [v2Output.allPathsRanked, searchQuery]);
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-8 font-sans text-ink-900" dir="rtl">
       {/* Top Banner & Header */}
-      <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-navy-700 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-navy-700 border-thick border-ink-900 rounded-3xl p-6 md:p-8 text-white elevated-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-xs font-semibold backdrop-blur-sm border border-white/20">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>محیط تست تعاملی و دیباگ لحظه‌ای الگوریتم (Test Harness)</span>
+              <span>موتور هوشمند هدایت شغلی V2 بر پایه داده‌های بومی‌سازی‌شده O*NET</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-              میز آزمایش موتور هدایت تحصیلی و شغلی مسیرو
+              میز آزمایش محاسباتی موتور هدایت شغلی (Path Engine V2)
             </h1>
             <p className="text-white/80 text-sm md:text-base max-w-2xl">
-              نمرات ۴ آزمون روان‌سنجی (هالند، گاردنر، MBTI، DISC) را وارد کنید و خروجی زنده، ردپای محاسبات، و تفکیک هر ۵ مرحله‌ی الگوریتم را بلافاصله مشاهده نمایید.
+              تلفیق شباهت کسینوسی هالند (Cosine Similarity)، برازش شناختی گاردنر بدون پاداش صلب، شاخص ۶بعدی MBTI و موقعیت‌یابی رفتاری درون‌تیمی با DISC.
             </p>
           </div>
 
@@ -273,33 +487,99 @@ export const PathEngineHarness: React.FC = () => {
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/15 hover:bg-white/25 active:scale-95 transition rounded-xl text-sm font-medium border border-white/30 backdrop-blur-md"
             >
               {copiedJson ? <Check className="w-4 h-4 text-teal-300" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedJson ? 'JSON کپی شد' : 'کپی کل ردپا (JSON)'}</span>
+              <span>{copiedJson ? 'JSON کپی شد' : 'کپی خروجی کامل V2 (JSON)'}</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Preset Selector */}
-      <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-bold text-ink-800">
-            <Award className="w-4 h-4 text-amber-500" />
-            <span>سناریوهای آماده و از پیش‌تعریف‌شده (Presets):</span>
+      <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
+          <div className="flex items-center gap-2 text-sm font-bold text-ink-900">
+            <Award className="w-5 h-5 text-amber-500" />
+            <span>سناریوهای آماده و پروفایل‌های مرزی O*NET:</span>
           </div>
-          <span className="text-xs text-ink-500">جهت بررسی سریع سناریوهای مرزی و آزمایشی</span>
+
+          {/* Filter Tabs */}
+          <div className="flex items-center gap-1.5 bg-neutral-100 p-1 rounded-xl text-xs font-semibold">
+            <button
+              onClick={() => setPresetFilter('all')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                presetFilter === 'all'
+                  ? 'bg-white text-teal-800 font-bold shadow-xs'
+                  : 'text-ink-600 hover:text-ink-900'
+              }`}
+            >
+              همه سناریوها ({PRESETS.length})
+            </button>
+            <button
+              onClick={() => setPresetFilter('cluster')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                presetFilter === 'cluster'
+                  ? 'bg-white text-teal-800 font-bold shadow-xs'
+                  : 'text-ink-600 hover:text-ink-900'
+              }`}
+            >
+              کلاسترهای شاخص ({PRESETS.filter((p) => p.category === 'cluster').length})
+            </button>
+            <button
+              onClick={() => setPresetFilter('edge_case')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                presetFilter === 'edge_case'
+                  ? 'bg-white text-teal-800 font-bold shadow-xs'
+                  : 'text-ink-600 hover:text-ink-900'
+              }`}
+            >
+              سناریوهای مرزی و استرس ({PRESETS.filter((p) => p.category === 'edge_case').length})
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-          {PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => applyPreset(preset)}
-              className="text-right p-3 rounded-xl border border-neutral-200 hover:border-teal-500 hover:bg-teal-50/50 transition-all text-xs group active:scale-[0.98]"
-            >
-              <div className="font-bold text-ink-900 group-hover:text-teal-800 line-clamp-1">{preset.title}</div>
-              <div className="text-ink-500 text-[11px] line-clamp-1 mt-0.5">{preset.desc}</div>
-            </button>
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {PRESETS.filter((p) => presetFilter === 'all' || p.category === presetFilter).map((preset) => {
+            const isSelected = selectedPresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                onClick={() => applyPreset(preset)}
+                className={`text-right p-3.5 rounded-xl border transition-all text-xs flex flex-col justify-between gap-2 active:scale-[0.98] ${
+                  isSelected
+                    ? 'border-teal-600 bg-teal-50/80 ring-2 ring-teal-500/20 shadow-xs'
+                    : 'border-neutral-200 hover:border-teal-400 hover:bg-neutral-50/80'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                    {preset.badge && (
+                      <span
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                          preset.category === 'edge_case'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-teal-100/80 text-teal-800 border border-teal-300'
+                        }`}
+                      >
+                        {preset.badge}
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse shrink-0" />
+                    )}
+                  </div>
+                  <div
+                    className={`font-bold line-clamp-2 leading-snug ${
+                      isSelected ? 'text-teal-900' : 'text-ink-900'
+                    }`}
+                  >
+                    {preset.title}
+                  </div>
+                </div>
+                <div className="text-ink-500 text-[11px] line-clamp-2 leading-relaxed mt-1">
+                  {preset.desc}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -350,10 +630,10 @@ export const PathEngineHarness: React.FC = () => {
                       onChange={(e) =>
                         setHollandScores({
                           ...hollandScores,
-                          [item.key]: Number(e.target.value),
+                          [item.key]: parseInt(e.target.value, 10),
                         })
                       }
-                      className={`w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer ${item.color}`}
+                      className={`w-full h-2 bg-neutral-200 rounded-lg cursor-pointer ${item.color}`}
                     />
                   </div>
                 ))}
@@ -361,69 +641,47 @@ export const PathEngineHarness: React.FC = () => {
             )}
           </div>
 
-          {/* Section: Gardner Intelligences */}
+          {/* Section: Gardner 8 Intelligences */}
           <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
               <div className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-navy-600" />
-                <span className="font-bold text-base text-ink-900">۲. آزمون هوش‌های چندگانه گاردنر</span>
+                <Brain className="w-5 h-5 text-pink-600" />
+                <span className="font-bold text-base text-ink-900">۲. هوش‌های سه‌گانه برتر گاردنر</span>
               </div>
               <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
                 <input
                   type="checkbox"
                   checked={includeGardner}
                   onChange={(e) => setIncludeGardner(e.target.checked)}
-                  className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
+                  className="rounded text-pink-600 focus:ring-pink-500 w-4 h-4"
                 />
-                <span className={includeGardner ? 'text-navy-700' : 'text-neutral-400'}>فعال</span>
+                <span className={includeGardner ? 'text-pink-700' : 'text-neutral-400'}>فعال</span>
               </label>
             </div>
 
             {includeGardner && (
               <div className="space-y-3">
                 <div className="text-xs text-ink-600">
-                  ۳ هوش برتر را به ترتیب اولویت انتخاب کنید (رتبه ۱: ضریب ۱.۰ | رتبه ۲: ۰.۷ | رتبه ۳: ۰.۴):
+                  ۳ هوش برتر را به ترتیب اولویت انتخاب کنید (ضریب رتبه ۱: ۱.۰، رتبه ۲: ۰.۷، رتبه ۳: ۰.۴):
                 </div>
-
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { key: 'logical', label: 'منطقی-ریاضی' },
-                    { key: 'spatial', label: 'تصویری-فضایی' },
-                    { key: 'linguistic', label: 'کلامی-زبانی' },
-                    { key: 'interpersonal', label: 'میان‌فردی (اجتماعی)' },
-                    { key: 'intrapersonal', label: 'درون‌فردی (خودآگاهی)' },
-                    { key: 'bodily', label: 'بدنی-حرکتی' },
-                    { key: 'musical', label: 'موسیقیایی-ریتمیک' },
-                    { key: 'naturalistic', label: 'طبیعت‌گرا' },
-                  ].map((intel) => {
-                    const isSelected = selectedGardner.includes(intel.key);
-                    const rankIndex = selectedGardner.indexOf(intel.key);
-
+                  {GARDNER_VALID_KEYS.map((key) => {
+                    const idx = selectedGardner.indexOf(key);
+                    const isSelected = idx !== -1;
                     return (
                       <button
-                        key={intel.key}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedGardner(selectedGardner.filter((k) => k !== intel.key));
-                          } else {
-                            if (selectedGardner.length < 3) {
-                              setSelectedGardner([...selectedGardner, intel.key]);
-                            } else {
-                              setSelectedGardner([...selectedGardner.slice(1), intel.key]);
-                            }
-                          }
-                        }}
-                        className={`flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium transition active:scale-95 ${
+                        key={key}
+                        onClick={() => handleToggleGardner(key)}
+                        className={`p-2.5 rounded-xl border text-xs font-semibold text-right flex items-center justify-between transition-all ${
                           isSelected
-                            ? 'bg-navy-50 border-navy-600 text-navy-800 font-bold shadow-sm'
-                            : 'bg-neutral-50 border-neutral-200 text-ink-700 hover:border-neutral-300'
+                            ? 'bg-pink-50 border-pink-500 text-pink-900 shadow-sm'
+                            : 'bg-neutral-50/70 border-neutral-200 text-ink-700 hover:bg-neutral-100'
                         }`}
                       >
-                        <span>{intel.label}</span>
+                        <span className="line-clamp-1">{GARDNER_LABELS[key] || key}</span>
                         {isSelected && (
-                          <span className="w-5 h-5 rounded-full bg-navy-600 text-white text-[11px] flex items-center justify-center font-bold">
-                            {rankIndex + 1}
+                          <span className="w-5 h-5 rounded-full bg-pink-600 text-white text-[10px] flex items-center justify-center font-bold shrink-0 mr-1">
+                            {idx + 1}
                           </span>
                         )}
                       </button>
@@ -438,165 +696,104 @@ export const PathEngineHarness: React.FC = () => {
           <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
               <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-pink-600" />
-                <span className="font-bold text-base text-ink-900">۳. تیپ شخصیتی MBTI و شدت قطعیت</span>
+                <Zap className="w-5 h-5 text-navy-600" />
+                <span className="font-bold text-base text-ink-900">۳. تیپ شخصیتی و شدت قطعیت MBTI</span>
               </div>
               <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
                 <input
                   type="checkbox"
                   checked={includeMbti}
                   onChange={(e) => setIncludeMbti(e.target.checked)}
-                  className="rounded text-pink-600 focus:ring-pink-500 w-4 h-4"
+                  className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
                 />
-                <span className={includeMbti ? 'text-pink-700' : 'text-neutral-400'}>فعال</span>
+                <span className={includeMbti ? 'text-navy-700' : 'text-neutral-400'}>فعال</span>
               </label>
             </div>
 
             {includeMbti && (
               <div className="space-y-4">
-                {/* Axis 1: E vs I */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span>محور هدایت انرژی (E / I):</span>
-                    <span className="font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded border border-pink-200">
-                      {mbtiEI} ({certaintyEI}%)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {(['E', 'I', 'X'] as const).map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => setMbtiEI(l)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
-                          mbtiEI === l
-                            ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
-                            : 'bg-neutral-50 text-ink-700 border-neutral-200 hover:bg-neutral-100'
-                        }`}
-                      >
-                        {l === 'E' ? 'E (برون‌گرا)' : l === 'I' ? 'I (درون‌گرا)' : 'X (خنثی)'}
-                      </button>
-                    ))}
-                  </div>
-                  {mbtiEI !== 'X' && (
-                    <input
-                      type="range"
-                      min={50}
-                      max={100}
-                      value={certaintyEI}
-                      onChange={(e) => setCertaintyEI(Number(e.target.value))}
-                      className="w-full h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-pink-600"
-                    />
-                  )}
-                </div>
+                {[
+                  {
+                    axis: 'EI',
+                    label: 'انرژی و تعامل',
+                    val: mbtiEI,
+                    setVal: setMbtiEI,
+                    opt1: { k: 'E', l: 'برون‌گرا (E)' },
+                    opt2: { k: 'I', l: 'درون‌گرا (I)' },
+                    cert: certaintyEI,
+                    setCert: setCertaintyEI,
+                  },
+                  {
+                    axis: 'SN',
+                    label: 'دریافت اطلاعات',
+                    val: mbtiSN,
+                    setVal: setMbtiSN,
+                    opt1: { k: 'S', l: 'حسی/عینی (S)' },
+                    opt2: { k: 'N', l: 'شهودی/انتزاعی (N)' },
+                    cert: certaintySN,
+                    setCert: setCertaintySN,
+                  },
+                  {
+                    axis: 'TF',
+                    label: 'تصمیم‌گیری',
+                    val: mbtiTF,
+                    setVal: setMbtiTF,
+                    opt1: { k: 'T', l: 'منطقی/تحلیلی (T)' },
+                    opt2: { k: 'F', l: 'ارزشی/عاطفی (F)' },
+                    cert: certaintyTF,
+                    setCert: setCertaintyTF,
+                  },
+                  {
+                    axis: 'JP',
+                    label: 'سبک زندگی و سازماندهی',
+                    val: mbtiJP,
+                    setVal: setMbtiJP,
+                    opt1: { k: 'J', l: 'قضاوتی/با برنامه (J)' },
+                    opt2: { k: 'P', l: 'منعطف/پویا (P)' },
+                    cert: certaintyJP,
+                    setCert: setCertaintyJP,
+                  },
+                ].map((row) => (
+                  <div key={row.axis} className="bg-neutral-50 p-3 rounded-xl border border-neutral-200/80 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-ink-800">
+                      <span>{row.label}</span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => row.setVal(row.opt1.k as any)}
+                          className={`px-2 py-0.5 rounded text-xs transition ${
+                            row.val === row.opt1.k
+                              ? 'bg-navy-700 text-white font-bold'
+                              : 'bg-white text-ink-700 border border-neutral-300'
+                          }`}
+                        >
+                          {row.opt1.l}
+                        </button>
+                        <button
+                          onClick={() => row.setVal(row.opt2.k as any)}
+                          className={`px-2 py-0.5 rounded text-xs transition ${
+                            row.val === row.opt2.k
+                              ? 'bg-navy-700 text-white font-bold'
+                              : 'bg-white text-ink-700 border border-neutral-300'
+                          }`}
+                        >
+                          {row.opt2.l}
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Axis 2: S vs N */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span>محور دریافت اطلاعات (S / N):</span>
-                    <span className="font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded border border-pink-200">
-                      {mbtiSN} ({certaintySN}%)
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-ink-500 shrink-0">شدت تمایل: {row.cert}٪</span>
+                      <input
+                        type="range"
+                        min={50}
+                        max={100}
+                        value={row.cert}
+                        onChange={(e) => row.setCert(parseInt(e.target.value, 10))}
+                        className="w-full h-1.5 bg-neutral-200 rounded-lg cursor-pointer accent-navy-600"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {(['S', 'N', 'X'] as const).map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => setMbtiSN(l)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
-                          mbtiSN === l
-                            ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
-                            : 'bg-neutral-50 text-ink-700 border-neutral-200 hover:bg-neutral-100'
-                        }`}
-                      >
-                        {l === 'S' ? 'S (حسی)' : l === 'N' ? 'N (شهودی)' : 'X (خنثی)'}
-                      </button>
-                    ))}
-                  </div>
-                  {mbtiSN !== 'X' && (
-                    <input
-                      type="range"
-                      min={50}
-                      max={100}
-                      value={certaintySN}
-                      onChange={(e) => setCertaintySN(Number(e.target.value))}
-                      className="w-full h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-pink-600"
-                    />
-                  )}
-                </div>
-
-                {/* Axis 3: T vs F */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span>محور تصمیم‌گیری (T / F):</span>
-                    <span className="font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded border border-pink-200">
-                      {mbtiTF} ({certaintyTF}%)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {(['T', 'F', 'X'] as const).map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => setMbtiTF(l)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
-                          mbtiTF === l
-                            ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
-                            : 'bg-neutral-50 text-ink-700 border-neutral-200 hover:bg-neutral-100'
-                        }`}
-                      >
-                        {l === 'T' ? 'T (فکری)' : l === 'F' ? 'F (احساسی)' : 'X (خنثی)'}
-                      </button>
-                    ))}
-                  </div>
-                  {mbtiTF !== 'X' && (
-                    <input
-                      type="range"
-                      min={50}
-                      max={100}
-                      value={certaintyTF}
-                      onChange={(e) => setCertaintyTF(Number(e.target.value))}
-                      className="w-full h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-pink-600"
-                    />
-                  )}
-                </div>
-
-                {/* Axis 4: J vs P */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span>محور سبک زندگی (J / P):</span>
-                    <span className="font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded border border-pink-200">
-                      {mbtiJP} ({certaintyJP}%)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {(['J', 'P', 'X'] as const).map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => setMbtiJP(l)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
-                          mbtiJP === l
-                            ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
-                            : 'bg-neutral-50 text-ink-700 border-neutral-200 hover:bg-neutral-100'
-                        }`}
-                      >
-                        {l === 'J' ? 'J (قضاوتی)' : l === 'P' ? 'P (ادراکی)' : 'X (خنثی)'}
-                      </button>
-                    ))}
-                  </div>
-                  {mbtiJP !== 'X' && (
-                    <input
-                      type="range"
-                      min={50}
-                      max={100}
-                      value={certaintyJP}
-                      onChange={(e) => setCertaintyJP(Number(e.target.value))}
-                      className="w-full h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-pink-600"
-                    />
-                  )}
-                </div>
+                ))}
               </div>
             )}
           </div>
@@ -605,7 +802,7 @@ export const PathEngineHarness: React.FC = () => {
           <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
               <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-amber-600" />
+                <UserCheck className="w-5 h-5 text-amber-600" />
                 <span className="font-bold text-base text-ink-900">۴. الگوی رفتاری DISC</span>
               </div>
               <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
@@ -622,539 +819,285 @@ export const PathEngineHarness: React.FC = () => {
             {includeDisc && (
               <div className="space-y-3">
                 <div className="text-xs text-ink-600">
-                  یک یا دو بعد غالب DISC را انتخاب کنید:
+                  تیپ رفتاری غالب برای استخراج پوزیشنینگ و نقش عملیاتی درون‌تیمی:
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { key: 'D', label: 'D (تسلط‌گرا)' },
-                    { key: 'I', label: 'I (تاثیرگذار)' },
-                    { key: 'S', label: 'S (باثبات)' },
-                    { key: 'C', label: 'C (وظیفه‌شناس)' },
-                  ].map((dim) => {
-                    const isSelected = discProfile.includes(dim.key);
-                    return (
-                      <button
-                        key={dim.key}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            const next = discProfile.replace(dim.key, '');
-                            setDiscProfile(next || 'C');
-                          } else {
-                            if (discProfile.length < 2) {
-                              setDiscProfile(discProfile + dim.key);
-                            } else {
-                              setDiscProfile(dim.key);
-                            }
-                          }
-                        }}
-                        className={`p-2 rounded-xl border text-xs font-bold transition active:scale-95 ${
-                          isSelected
-                            ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
-                            : 'bg-neutral-50 text-ink-700 border-neutral-200 hover:bg-neutral-100'
-                        }`}
-                      >
-                        {dim.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="text-[11px] text-ink-500">
-                  پروفایل انتخابی فعلی: <span className="font-bold text-amber-800">{discProfile}</span>
+                    { key: 'D', label: 'D (تسلط و قاطعیت)' },
+                    { key: 'I', label: 'I (تاثیرگذاری و انگیزش)' },
+                    { key: 'S', label: 'S (ثبات و پایداری)' },
+                    { key: 'C', label: 'C (دقت و وظیفه‌شناسی)' },
+                  ].map((d) => (
+                    <button
+                      key={d.key}
+                      onClick={() => setDiscProfile(d.key as any)}
+                      className={`p-2.5 rounded-xl border text-center font-bold text-xs transition ${
+                        discProfile === d.key
+                          ? 'bg-amber-100 border-amber-600 text-amber-900 shadow-sm'
+                          : 'bg-neutral-50 border-neutral-200 text-ink-700 hover:bg-neutral-100'
+                      }`}
+                    >
+                      {d.key}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Realtime Stage Traces & Results (7 cols) */}
+        {/* Right Column: Realtime Engine Outputs & Traces (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
-          {/* Navigation Tabs */}
-          <div className="bg-white rounded-2xl p-2 border border-neutral-300/80 shadow-sm flex items-center gap-1.5 overflow-x-auto text-xs font-bold scrollbar-none">
+          {/* Tabs Navigation */}
+          <div className="flex items-center gap-2 border-b border-neutral-200 pb-2 overflow-x-auto">
             {[
-              { id: 'summary', label: 'خروجی ۷ مسیر نهایی', icon: Award },
-              { id: 'stage1', label: 'مرحله ۱ (خوشه پایه)', icon: Compass },
-              { id: 'stage2', label: 'مرحله ۲ (امتیاز گاردنر)', icon: Brain },
-              { id: 'stage3', label: 'مرحله ۳ (شکست MBTI)', icon: UserCheck },
-              { id: 'stage4', label: 'مرحله ۴ (آستانه و DISC)', icon: Activity },
-              { id: 'stage5', label: 'مرحله ۵ (استخرها)', icon: Layers },
-              { id: 'json', label: 'کد خام JSON', icon: FileText },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeStageTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveStageTab(tab.id as any)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition whitespace-nowrap ${
-                    isActive
-                      ? 'bg-teal-700 text-white shadow-sm'
-                      : 'text-ink-700 hover:bg-neutral-100 hover:text-ink-900'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
+              { id: 'summary', label: 'سبد ۷ مسیره پیشنهادی', icon: <Layers className="w-4 h-4" /> },
+              { id: 'clusters', label: '۳ کلاستر رغبتی برتر O*NET', icon: <Compass className="w-4 h-4" /> },
+              { id: 'allJobs', label: 'کاتالوگ ارزیابی مشاغل O*NET', icon: <Briefcase className="w-4 h-4" /> },
+              { id: 'json', label: 'کد خام JSON خروجی', icon: <Tag className="w-4 h-4" /> },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id as any)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                  activeTab === t.id
+                    ? 'bg-teal-700 text-white shadow-sm'
+                    : 'bg-white text-ink-700 border border-neutral-200 hover:bg-neutral-100'
+                }`}
+              >
+                {t.icon}
+                <span>{t.label}</span>
+              </button>
+            ))}
           </div>
 
-          {/* TAB 1: SUMMARY (Final 7 Paths) */}
-          {activeStageTab === 'summary' && (
+          {/* Tab 1: Summary 7-Path Basket */}
+          {activeTab === 'summary' && (
             <div className="space-y-6">
-              {/* Completeness Warning Banner if any */}
-              {trace.finalOutput.completenessWarning && (
-                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300/80 text-amber-900 text-xs flex items-start gap-3">
-                  <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold text-amber-950 mb-0.5">توجه به وضعیت داده‌های ورودی:</div>
-                    <div>{trace.finalOutput.completenessWarning}</div>
+              {/* Main Path Card (Top 1) */}
+              <div className="bg-gradient-to-br from-teal-50 via-white to-amber-50/30 rounded-3xl p-6 border-2 border-teal-600 shadow-md space-y-4 relative overflow-hidden">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-700 text-white rounded-full text-xs font-black">
+                      <Award className="w-3.5 h-3.5 text-amber-300" />
+                      <span>مسیر شغلی اصلی (اولویت ۱)</span>
+                    </div>
+                    <h2 className="text-xl font-black text-ink-900 pt-1">
+                      {v2Output.basket.mainPath.titleFa}
+                    </h2>
+                    <span className="text-xs font-bold text-teal-800 bg-teal-100/80 px-2.5 py-0.5 rounded-lg inline-block">
+                      {v2Output.basket.mainPath.cluster.titleFa} (SOC: {v2Output.basket.mainPath.onetCode})
+                    </span>
+                  </div>
+
+                  <div className="text-center bg-white px-4 py-3 rounded-2xl border-2 border-teal-600 shadow-sm shrink-0">
+                    <div className="text-2xl font-black text-teal-700 font-numeric">
+                      {v2Output.basket.mainPath.matchScore}٪
+                    </div>
+                    <span className="text-[10px] font-bold text-ink-500">نمره سازگاری کل</span>
                   </div>
                 </div>
-              )}
 
-              {/* Main Recommendation Card */}
-              <div className="bg-gradient-to-br from-teal-50 via-white to-neutral-50 rounded-3xl p-6 border-2 border-teal-600 shadow-md relative overflow-hidden space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-600 text-white rounded-full text-xs font-bold">
-                    <Award className="w-3.5 h-3.5" />
-                    <span>پیشنهاد اولویت ۱ (مسیر اصلی)</span>
+                <p className="text-xs leading-relaxed text-ink-700">
+                  {v2Output.basket.mainPath.description}
+                </p>
+
+                {/* Metrics Breakdown */}
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  <div className="bg-white/80 p-2.5 rounded-xl border border-neutral-200 text-center">
+                    <span className="text-[10px] text-ink-500 block">انطباق هالند</span>
+                    <span className="text-sm font-bold text-teal-700 font-numeric">
+                      {v2Output.basket.mainPath.metrics.hollandFit}٪
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-ink-500">شاخص تطابق:</span>
-                    <span className="text-2xl font-black text-teal-800">
-                      {trace.finalOutput.mainPath.matchScore}%
+                  <div className="bg-white/80 p-2.5 rounded-xl border border-neutral-200 text-center">
+                    <span className="text-[10px] text-ink-500 block">انطباق گاردنر</span>
+                    <span className="text-sm font-bold text-pink-700 font-numeric">
+                      {v2Output.basket.mainPath.metrics.gardnerFit}٪
+                    </span>
+                  </div>
+                  <div className="bg-white/80 p-2.5 rounded-xl border border-neutral-200 text-center">
+                    <span className="text-[10px] text-ink-500 block">آرامش MBTI</span>
+                    <span className="text-sm font-bold text-navy-700 font-numeric">
+                      {v2Output.basket.mainPath.metrics.mbtiFit}٪
                     </span>
                   </div>
                 </div>
 
-                <div>
-                  <h2 className="text-xl font-extrabold text-ink-900">{trace.finalOutput.mainPath.title}</h2>
-                  <p className="text-xs text-ink-600 mt-1">{trace.finalOutput.mainPath.description}</p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs">
-                  <div className="p-3 rounded-xl bg-white border border-teal-200">
-                    <span className="font-bold text-teal-900 block mb-1">رشته پیشنهادی دبیرستان:</span>
-                    <span className="text-ink-800">{trace.finalOutput.mainPath.recommendedHighschoolTrack}</span>
+                {/* DISC In-Role Positioning Box */}
+                <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                      <UserCheck className="w-4 h-4 text-amber-700" />
+                      <span>پوزیشن و سبک عملیاتی درون شغل (DISC):</span>
+                    </span>
+                    <span className="text-xs font-extrabold text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-md">
+                      «{v2Output.basket.mainPath.discPositioning.targetRoleTitle}»
+                    </span>
                   </div>
-                  <div className="p-3 rounded-xl bg-white border border-teal-200">
-                    <span className="font-bold text-teal-900 block mb-1">رشته‌های دانشگاهی مرتبط:</span>
-                    <span className="text-ink-800">{trace.finalOutput.mainPath.universityMajors.slice(0, 3).join('، ')}</span>
-                  </div>
-                </div>
-
-                {/* Why Compatible Reasoning */}
-                <div className="p-3.5 bg-teal-100/50 rounded-xl border border-teal-200/80 text-xs space-y-1.5 text-teal-950">
-                  <div className="font-bold flex items-center gap-1.5 text-teal-900">
-                    <Zap className="w-3.5 h-3.5 text-teal-700" />
-                    <span>تحلیل هماهنگی روان‌سنجی:</span>
-                  </div>
-                  <p>• {trace.finalOutput.mainPath.whyCompatible.hollandReasoning}</p>
-                  <p>• {trace.finalOutput.mainPath.whyCompatible.gardnerReasoning}</p>
-                  <p>• {trace.finalOutput.mainPath.whyCompatible.mbtiReasoning}</p>
-                  <p>• {trace.finalOutput.mainPath.whyCompatible.discReasoning}</p>
-                </div>
-              </div>
-
-              {/* 3 Alternative Paths */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sm text-ink-900 flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-navy-600" />
-                    <span>۳ مسیر جایگزین هم‌خانواده (Alternative Paths):</span>
-                  </h3>
-                  <span className="text-[11px] text-ink-500">انتخاب شده از خوشه پایه تحصیلی</span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {trace.finalOutput.alternativePaths.map((alt, idx) => (
-                    <div
-                      key={alt.pathId}
-                      className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-sm space-y-2 hover:border-navy-500 transition"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="w-5 h-5 rounded-full bg-navy-100 text-navy-800 text-xs font-bold flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <span className="font-black text-sm text-navy-800">{alt.matchScore}%</span>
-                      </div>
-                      <div className="font-bold text-xs text-ink-900 line-clamp-1">{alt.title}</div>
-                      <div className="text-[11px] text-ink-500 line-clamp-2">{alt.recommendedHighschoolTrack}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 3 Complementary Paths */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sm text-ink-900 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-pink-600" />
-                    <span>۳ مسیر مکمل و خلاقانه میان‌رشته‌ای (Complementary Paths):</span>
-                  </h3>
-                  <span className="text-[11px] text-ink-500">انتخاب شده بر مبنای استعداد ترکیبی و چندگانه</span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {trace.finalOutput.complementaryPaths.map((comp, idx) => (
-                    <div
-                      key={comp.pathId}
-                      className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-sm space-y-2 hover:border-pink-500 transition"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="w-5 h-5 rounded-full bg-pink-100 text-pink-800 text-xs font-bold flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <span className="font-black text-sm text-pink-800">{comp.matchScore}%</span>
-                      </div>
-                      <div className="font-bold text-xs text-ink-900 line-clamp-1">{comp.title}</div>
-                      <div className="text-[11px] text-ink-500 line-clamp-2">{comp.recommendedHighschoolTrack}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: STAGE 1 TRACE */}
-          {activeStageTab === 'stage1' && (
-            <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-6">
-              <div>
-                <h3 className="font-bold text-sm text-ink-900 mb-1">مرحله ۱-الف: امتیاز نرمال‌شده ۵ گروه اصلی</h3>
-                <p className="text-xs text-ink-500">
-                  فاصله رتبه ۱ و ۲: <span className="font-bold text-teal-800">{trace.stage1.groupGap}</span> (آستانه حالت ترکیبی: فاصله کمتر یا مساوی ۱۰)
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                {trace.stage1.groupScoresNormalized.map((grp) => {
-                  const isMain = trace.stage1.mainGroup.includes(grp.group);
-                  return (
-                    <div key={grp.group} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs font-semibold">
-                        <span className={isMain ? 'text-teal-800 font-extrabold flex items-center gap-1.5' : 'text-ink-700'}>
-                          {grp.group}
-                          {isMain && <span className="px-1.5 py-0.5 bg-teal-100 text-teal-800 rounded text-[10px]">خوشه انتخابی</span>}
-                        </span>
-                        <span>{grp.score}%</span>
-                      </div>
-                      <div className="w-full bg-neutral-100 h-2.5 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${isMain ? 'bg-teal-600' : 'bg-neutral-300'}`}
-                          style={{ width: `${grp.score}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Subfields if TVET */}
-              {trace.stage1.subfieldScoresNormalized && trace.stage1.subfieldScoresNormalized.length > 0 && (
-                <div className="space-y-3 pt-4 border-t border-neutral-200">
-                  <div>
-                    <h4 className="font-bold text-sm text-ink-900">مرحله ۱-ب: زیررشته‌های شاخه فنی‌وحرفه‌ای</h4>
-                    <p className="text-xs text-ink-500">
-                      فاصله رتبه ۱ و ۲ زیررشته: <span className="font-bold text-teal-800">{trace.stage1.subfieldGap}</span> (آستانه: ۸)
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {trace.stage1.subfieldScoresNormalized.map((sub) => {
-                      const isTop = trace.stage1.topSubfields.includes(sub.subfield);
-                      return (
-                        <div
-                          key={sub.subfield}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between ${
-                            isTop ? 'bg-teal-50 border-teal-500 font-bold text-teal-950' : 'bg-neutral-50 border-neutral-200 text-ink-700'
-                          }`}
-                        >
-                          <span className="line-clamp-1">{sub.subfield}</span>
-                          <span>{sub.score}%</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 3: STAGE 2 TRACE */}
-          {activeStageTab === 'stage2' && (
-            <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-bold text-sm text-ink-900">مرحله ۲: امتیازدهی گاردنر و ضریب هم‌راستایی</h3>
-                  <p className="text-xs text-ink-500">مشاهده جدول تمام ۲۸ مسیر دیتابیس</p>
-                </div>
-                <div className="relative w-full sm:w-60">
-                  <Search className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                  <input
-                    type="text"
-                    placeholder="جستجوی مسیر..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-3 pr-8 py-1.5 rounded-lg border border-neutral-200 text-xs focus:ring-1 focus:ring-teal-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="overflow-x-auto border border-neutral-200 rounded-xl">
-                <table className="w-full text-right text-xs">
-                  <thead className="bg-neutral-100 text-ink-800 border-b border-neutral-200">
-                    <tr>
-                      <th className="p-2.5">عنوان مسیر</th>
-                      <th className="p-2.5">امتیاز گاردنر</th>
-                      <th className="p-2.5">ضریب هم‌راستایی</th>
-                      <th className="p-2.5">امتیاز مرحله ۲</th>
-                      <th className="p-2.5">حذف اولیه؟</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-200">
-                    {filteredStage2.map((row) => (
-                      <tr key={row.pathId} className="hover:bg-neutral-50">
-                        <td className="p-2.5 font-bold text-ink-900">{row.title}</td>
-                        <td className="p-2.5 font-mono">{row.gardnerScore.toFixed(1)}</td>
-                        <td className="p-2.5">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
-                              row.alignmentBonus === 1.5
-                                ? 'bg-teal-100 text-teal-800'
-                                : row.alignmentBonus === 1.3
-                                ? 'bg-navy-100 text-navy-800'
-                                : 'bg-neutral-100 text-ink-600'
-                            }`}
-                          >
-                            {row.alignmentBonus}x ({row.alignmentReason})
-                          </span>
-                        </td>
-                        <td className="p-2.5 font-bold text-teal-800">{row.stage2Score.toFixed(1)}</td>
-                        <td className="p-2.5">
-                          {row.excludedFromInitialList ? (
-                            <span className="text-pink-600 font-bold">بله ⚠️</span>
-                          ) : (
-                            <span className="text-teal-700">خیر</span>
-                          )}
-                        </td>
-                      </tr>
+                  <p className="text-xs text-amber-950 leading-relaxed font-medium">
+                    {v2Output.basket.mainPath.discPositioning.workStyleGuidance}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {v2Output.basket.mainPath.discPositioning.strengthsInRole.map((st, i) => (
+                      <span key={i} className="text-[11px] bg-white px-2 py-0.5 rounded-md border border-amber-200 text-amber-900 font-bold">
+                        ✓ {st}
+                      </span>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: STAGE 3 TRACE */}
-          {activeStageTab === 'stage3' && (
-            <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-sm text-ink-900">مرحله ۳: شکست ۴ محور MBTI برای هر مسیر</h3>
-                  <p className="text-xs text-ink-500">تحلیل فاصله بردار رفتاری شغل از شخصیت</p>
+                  </div>
                 </div>
 
-                <select
-                  value={selectedPathForStage3 || trace.finalOutput.mainPath.pathId}
-                  onChange={(e) => setSelectedPathForStage3(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-neutral-300 text-xs font-semibold bg-neutral-50 outline-none"
-                >
-                  {PATH_DATABASE.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
+                {/* Educational Roadmap */}
+                <div className="text-xs text-ink-600 pt-1 border-t border-neutral-200/80 flex items-center justify-between">
+                  <span><strong>رشته پیشنهادی دبیرستان:</strong> {v2Output.basket.mainPath.educationalRoadmap.highSchoolTrack}</span>
+                  <span><strong>دانشگاه:</strong> {v2Output.basket.mainPath.educationalRoadmap.universityMajors.slice(0, 2).join('، ')}</span>
+                </div>
+              </div>
+
+              {/* 3 Alternative Paths (Same Cluster) */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-black text-ink-900">
+                  <span className="w-2 h-4 bg-teal-600 rounded-full" />
+                  <span>۳ مسیر جایگزین (طرح پشتیبان در همان کلاستر تخصصی)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {v2Output.basket.alternativePaths.map((alt) => (
+                    <div key={alt.jobId} className="bg-white rounded-2xl p-4 border border-neutral-300 shadow-sm space-y-2.5 flex flex-col justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                            {alt.cluster.titleFa}
+                          </span>
+                          <span className="text-xs font-black text-teal-700 font-numeric">{alt.matchScore}٪</span>
+                        </div>
+                        <h3 className="text-sm font-black text-ink-900 pt-1">{alt.titleFa}</h3>
+                        <p className="text-[11px] text-ink-600 line-clamp-2">{alt.description}</p>
+                      </div>
+
+                      <div className="bg-neutral-50 p-2 rounded-xl text-[11px] text-ink-700 border border-neutral-200">
+                        <span className="font-bold text-ink-900 block">نقش DISC:</span>
+                        <span className="line-clamp-1">{alt.discPositioning.targetRoleTitle}</span>
+                      </div>
+                    </div>
                   ))}
-                </select>
+                </div>
               </div>
 
-              {(() => {
-                const targetId = selectedPathForStage3 || trace.finalOutput.mainPath.pathId;
-                const pathTrace = trace.stage3.find((s) => s.pathId === targetId);
-                const pathMeta = PATH_DATABASE.find((p) => p.id === targetId);
-
-                if (!pathTrace || !pathMeta) return null;
-
-                return (
-                  <div className="space-y-4">
-                    <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 flex items-center justify-between text-xs">
-                      <div>
-                        مسیر انتخابی: <span className="font-bold text-ink-900">{pathMeta.title}</span>
+              {/* 3 Complementary Paths (Interdisciplinary) */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-black text-ink-900">
+                  <span className="w-2 h-4 bg-pink-600 rounded-full" />
+                  <span>۳ مسیر مکمل و خلاقانه (میان‌رشته‌ای با هوش‌های ثانویه)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {v2Output.basket.complementaryPaths.map((comp) => (
+                    <div key={comp.jobId} className="bg-white rounded-2xl p-4 border border-neutral-300 shadow-sm space-y-2.5 flex flex-col justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded">
+                            {comp.cluster.titleFa}
+                          </span>
+                          <span className="text-xs font-black text-pink-700 font-numeric">{comp.matchScore}٪</span>
+                        </div>
+                        <h3 className="text-sm font-black text-ink-900 pt-1">{comp.titleFa}</h3>
+                        <p className="text-[11px] text-ink-600 line-clamp-2">{comp.description}</p>
                       </div>
+
+                      <div className="bg-neutral-50 p-2 rounded-xl text-[11px] text-ink-700 border border-neutral-200">
+                        <span className="font-bold text-ink-900 block">نقش DISC:</span>
+                        <span className="line-clamp-1">{comp.discPositioning.targetRoleTitle}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: O*NET Top 3 Clusters */}
+          {activeTab === 'clusters' && (
+            <div className="space-y-4">
+              <div className="text-xs text-ink-600 bg-neutral-100 p-3 rounded-xl border border-neutral-200">
+                این ۳ کلاستر شغلی با محاسبه شباهت کسینوسی (Cosine Similarity) بردار RIASEC شما با ۲۰ کلاستر استاندارد O*NET شناسایی شده‌اند:
+              </div>
+
+              <div className="space-y-3">
+                {v2Output.topCareerClusters.map((cl, idx) => (
+                  <div key={cl.clusterId} className="bg-white p-4 rounded-2xl border border-neutral-300 shadow-sm flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-full bg-teal-700 text-white font-black text-sm flex items-center justify-center shrink-0 font-numeric">
+                        {idx + 1}
+                      </span>
                       <div>
-                        ضریب نهایی MBTI: <span className="font-bold text-pink-700 font-mono text-sm">{pathTrace.mbtiMultiplier.toFixed(2)}</span>
+                        <h3 className="text-sm font-bold text-ink-900">{cl.titleFa}</h3>
+                        <span className="text-xs text-ink-500 font-sans">{cl.titleEn}</span>
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto border border-neutral-200 rounded-xl">
-                      <table className="w-full text-right text-xs">
-                        <thead className="bg-neutral-100 text-ink-800 border-b border-neutral-200">
-                          <tr>
-                            <th className="p-2.5">محور</th>
-                            <th className="p-2.5">حرف غالب</th>
-                            <th className="p-2.5">بعد رفتاری</th>
-                            <th className="p-2.5">مقدار هدف</th>
-                            <th className="p-2.5">مقدار واقعی</th>
-                            <th className="p-2.5">فاصله</th>
-                            <th className="p-2.5">قطعیت%</th>
-                            <th className="p-2.5">سهم محور</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-200 font-mono">
-                          {pathTrace.axisBreakdown.map((b) => (
-                            <tr key={b.axis} className="hover:bg-neutral-50">
-                              <td className="p-2.5 font-sans font-bold">{b.axis}</td>
-                              <td className="p-2.5">{b.dominantLetter}</td>
-                              <td className="p-2.5 font-sans">{b.targetDimension}</td>
-                              <td className="p-2.5">{b.targetValue}</td>
-                              <td className="p-2.5">{b.actualValue}</td>
-                              <td className="p-2.5">{b.distance.toFixed(2)}</td>
-                              <td className="p-2.5">{b.certaintyPct}%</td>
-                              <td className="p-2.5 font-bold text-pink-700">{b.axisContribution.toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="text-left shrink-0">
+                      <span className="text-base font-black text-teal-700 font-numeric">{cl.affinityScore}٪</span>
+                      <span className="text-[10px] text-ink-500 block">قرابت رغبتی</span>
                     </div>
                   </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* TAB 5: STAGE 4 TRACE */}
-          {activeStageTab === 'stage4' && (
-            <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
-              <div className="space-y-1">
-                <h3 className="font-bold text-sm text-ink-900">مرحله ۴ و ۴.ب: فیلتر DISC، مقیاس پویا و فیلتر آستانه</h3>
-                <p className="text-xs text-ink-500">
-                  حداکثر امتیاز خام تئوریک: <span className="font-bold text-ink-900">{trace.stage4b.maxRawScore}</span> | آستانه فیلتر: <span className="font-bold text-ink-900">{trace.stage4b.thresholdValue}%</span>
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
-                <div>
-                  <span className="text-ink-500 block mb-1">تعداد واجدین قبل از Relax:</span>
-                  <span className="text-lg font-bold text-ink-900">{trace.stage4b.eligibleCountBeforeRelax}</span>
-                </div>
-                <div>
-                  <span className="text-ink-500 block mb-1">وضعیت Relax آستانه:</span>
-                  <span className={`text-lg font-bold ${trace.stage4b.thresholdWasRelaxed ? 'text-pink-600' : 'text-teal-700'}`}>
-                    {trace.stage4b.thresholdWasRelaxed ? 'فعال شد ⚠️' : 'خیر (طبیعی)'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-ink-500 block mb-1">تعداد کل مسیرهای نهایی:</span>
-                  <span className="text-lg font-bold text-teal-800">۷ مسیر</span>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto border border-neutral-200 rounded-xl">
-                <table className="w-full text-right text-xs">
-                  <thead className="bg-neutral-100 text-ink-800 border-b border-neutral-200">
-                    <tr>
-                      <th className="p-2.5">مسیر</th>
-                      <th className="p-2.5">امتیاز خام نهایی</th>
-                      <th className="p-2.5">شاخص تطابق (MatchScore)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-200">
-                    {[...trace.stage4b.allPathScores]
-                      .sort((a, b) => b.matchScore - a.matchScore)
-                      .map((p) => {
-                        const pathDef = PATH_DATABASE.find((db) => db.id === p.pathId);
-                        return (
-                          <tr key={p.pathId} className="hover:bg-neutral-50">
-                            <td className="p-2.5 font-bold text-ink-900">{pathDef?.title || p.pathId}</td>
-                            <td className="p-2.5 font-mono">{p.rawFinalScore.toFixed(1)}</td>
-                            <td className="p-2.5 font-bold text-teal-800">{p.matchScore}%</td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                ))}
               </div>
             </div>
           )}
 
-          {/* TAB 6: STAGE 5 TRACE */}
-          {activeStageTab === 'stage5' && (
-            <div className="bg-white rounded-2xl p-5 border border-neutral-300/80 shadow-sm space-y-4">
-              <div>
-                <h3 className="font-bold text-sm text-ink-900">مرحله ۵: مونتاژ استخرهای جایگزین و مکمل</h3>
-                <p className="text-xs text-ink-500">بررسی هم‌پوشانی گروه اصلی و وضعیت فعال‌سازی مکانیزم Fallback</p>
+          {/* Tab 3: All O*NET Jobs */}
+          {activeTab === 'allJobs' && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="w-4 h-4 text-ink-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="جستجو در عناوین شغلی، کلاسترها یا کدهای O*NET..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-4 pr-9 py-2.5 text-xs bg-white border border-neutral-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                />
               </div>
 
-              <div className="space-y-4 text-xs">
-                {/* Alternatives */}
-                <div className="p-4 rounded-xl bg-navy-50/60 border border-navy-200 space-y-2">
-                  <div className="flex items-center justify-between font-bold text-navy-900">
-                    <span>استخر مسیرهای جایگزین (Alternative Pool):</span>
-                    <span>
-                      Fallback:{' '}
-                      {trace.stage5.alternativePoolFallbackTriggered ? (
-                        <span className="text-pink-600">فعال شد ⚠️</span>
-                      ) : (
-                        <span className="text-teal-700">خیر ✅</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    {trace.stage5.alternativePool.map((alt, i) => {
-                      const def = PATH_DATABASE.find((p) => p.id === alt.pathId);
-                      return (
-                        <div key={alt.pathId} className="flex items-center justify-between bg-white p-2 rounded-lg border border-navy-100">
-                          <span>{i + 1}. {def?.title || alt.pathId}</span>
-                          <span>هم‌پوشانی با خوشه اصلی: {alt.matchesMainGroup ? 'بله ✅' : 'خیر ⚠️'}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+              <div className="space-y-2.5">
+                {filteredAllJobs.map((job, idx) => (
+                  <div key={job.jobId} className="bg-white p-4 rounded-2xl border border-neutral-200/90 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-ink-400 font-numeric ml-1.5 font-bold">#{idx + 1}</span>
+                        <span className="text-sm font-black text-ink-900">{job.titleFa}</span>
+                        <span className="text-xs text-ink-500 mr-2 font-mono">({job.onetCode})</span>
+                      </div>
+                      <span className="text-sm font-black text-teal-700 font-numeric">{job.matchScore}٪</span>
+                    </div>
 
-                {/* Complementary */}
-                <div className="p-4 rounded-xl bg-pink-50/60 border border-pink-200 space-y-2">
-                  <div className="flex items-center justify-between font-bold text-pink-900">
-                    <span>استخر مسیرهای مکمل خلاقانه (Complementary Pool):</span>
-                    <span>
-                      Fallback:{' '}
-                      {trace.stage5.complementaryPoolFallbackTriggered ? (
-                        <span className="text-pink-600">فعال شد ⚠️</span>
-                      ) : (
-                        <span className="text-teal-700">خیر ✅</span>
-                      )}
-                    </span>
+                    <div className="text-xs text-ink-600 line-clamp-1">{job.description}</div>
+
+                    <div className="flex items-center justify-between text-[11px] text-ink-500 pt-1 border-t border-neutral-100">
+                      <span>کلاستر: {job.cluster.titleFa}</span>
+                      <span>نقش غالب DISC: <strong>{job.discPositioning.targetRoleTitle}</strong></span>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    {trace.stage5.complementaryPool.map((comp, i) => {
-                      const def = PATH_DATABASE.find((p) => p.id === comp.pathId);
-                      return (
-                        <div key={comp.pathId} className="flex items-center justify-between bg-white p-2 rounded-lg border border-pink-100">
-                          <span>{i + 1}. {def?.title || comp.pathId}</span>
-                          <span>هم‌پوشانی با خوشه اصلی: {comp.matchesMainGroup ? 'بله' : 'خیر'}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* TAB 7: RAW JSON TRACE */}
-          {activeStageTab === 'json' && (
-            <div className="bg-neutral-900 text-teal-300 rounded-2xl p-5 font-mono text-xs overflow-x-auto shadow-inner space-y-3 max-h-[700px]">
-              <div className="flex items-center justify-between text-neutral-400 border-b border-neutral-700 pb-2">
-                <span>ردپای کامل خروجی (PathEngineTrace JSON)</span>
+          {/* Tab 4: Raw JSON */}
+          {activeTab === 'json' && (
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-ink-700">خروجی کامل آبجکت V2 (JSON):</span>
                 <button
                   onClick={copyJsonTrace}
-                  className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-[11px] flex items-center gap-1"
+                  className="text-xs text-teal-700 hover:text-teal-800 font-bold flex items-center gap-1"
                 >
-                  {copiedJson ? <Check className="w-3 h-3 text-teal-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedJson ? 'کپی شد' : 'کپی'}</span>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>کپی محتوا</span>
                 </button>
               </div>
-              <pre>{JSON.stringify(trace, null, 2)}</pre>
+              <pre className="bg-neutral-900 text-teal-400 p-4 rounded-2xl text-xs font-mono overflow-x-auto max-h-[500px] dir-ltr text-left">
+                {JSON.stringify(v2Output, null, 2)}
+              </pre>
             </div>
           )}
         </div>

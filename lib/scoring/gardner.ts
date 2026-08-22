@@ -4,7 +4,8 @@ export interface GardnerResponse {
 }
 
 export interface GardnerResult {
-  scores: Record<string, number>; // average 1.0 to 5.0
+  scores: Record<string, number>; // average 1.0 to 5.0 across all 8 intelligences
+  allScores?: Record<string, number>; // alias for explicit 8-intelligence score access
   topIntelligences: string[]; // Top 3 intelligence keys
   strongIntelligences: string[]; // Intelligences with score >= 4.0
   existentialScore?: number | null; // Supplementary
@@ -86,6 +87,7 @@ export function scoreGardner(responses: GardnerResponse[]): GardnerResult {
 
   return {
     scores,
+    allScores: scores,
     topIntelligences,
     strongIntelligences,
     existentialScore,
