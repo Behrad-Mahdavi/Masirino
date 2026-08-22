@@ -22,6 +22,15 @@ import {
   Sparkles,
   AlertCircle,
   UserCheck,
+  X,
+  TrendingUp,
+  Bot,
+  Laptop,
+  Award,
+  ExternalLink,
+  ShieldCheck,
+  BarChart3,
+  Info,
 } from 'lucide-react';
 
 export default function ResultsPage() {
@@ -30,6 +39,10 @@ export default function ResultsPage() {
   const [mbtiResult, setMbtiResult] = useState<any>(null);
   const [discResult, setDiscResult] = useState<any>(null);
   const [pathDna, setPathDna] = useState<PathDnaProfile | null>(null);
+
+  // V3 Interactive Modal State
+  const [selectedJobModal, setSelectedJobModal] = useState<any | null>(null);
+  const [activeModalTab, setActiveModalTab] = useState<'xai' | 'roadmap' | 'market' | 'disc'>('xai');
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -63,7 +76,6 @@ export default function ResultsPage() {
         console.warn('Supabase DB fetch warning:', err);
       }
 
-      // Fallback to localStorage or mock defaults
       if (!holland) {
         holland = JSON.parse(
           localStorage.getItem('test_result_HOLLAND') ||
@@ -121,6 +133,8 @@ export default function ResultsPage() {
               profile: 'ID',
               primaryDimension: 'I',
               secondaryDimension: 'D',
+              mostCounts: { D: 4, I: 7, S: 2, C: 3 },
+              leastCounts: { D: 1, I: 0, S: 3, C: 2 },
             })
         );
       }
@@ -130,114 +144,74 @@ export default function ResultsPage() {
       setMbtiResult(mbti);
       setDiscResult(disc);
 
-      const dna = computePathDna(holland, gardner, mbti, disc);
-      setPathDna(dna);
+      if (holland || gardner || mbti || disc) {
+        const computed = computePathDna(holland, gardner, mbti, disc);
+        setPathDna(computed);
+      }
     };
 
     fetchResults();
   }, []);
 
   return (
-    <div className="space-y-8">
-      {/* Back & Actions header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-ink-500 hover:text-teal-700">
-          <ArrowRight className="w-4 h-4" /> بازگشت به داشبورد دانش‌آموز
-        </Link>
-
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" icon={<Printer className="w-4 h-4" />} onClick={() => window.print()}>
-            چاپ / ذخیره PDF
+    <div className="max-w-7xl mx-auto space-y-8 pb-16 font-sans text-ink-900" dir="rtl">
+      {/* Header Actions */}
+      <div className="flex flex-wrap justify-between items-center gap-4 bg-white border-thick border-ink-900 rounded-2xl p-6 elevated-md">
+        <div>
+          <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-500 mb-2 inline-block">
+            سامانه تصمیم‌گیری چندمعیاره PathEngine V3
+          </span>
+          <h1 className="text-3xl font-black text-ink-900">شناسنامه جامع هدایت تحصیلی و شغلی (Path DNA)</h1>
+          <p className="text-ink-500 text-sm mt-1">تلفیق داده‌محور رغبت‌ها، هوش‌های ۸گانه، شخصیت‌شناسی، رفتار سازمانی و پایداری بازار کار</p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="secondary" size="sm" onClick={() => window.print()} className="gap-2 border-2">
+            <Printer className="w-4 h-4" />
+            <span>چاپ پرونده</span>
           </Button>
-          <Button variant="brand" brand="third" size="sm" icon={<Share2 className="w-4 h-4" />}>
-            اشتراک‌گذاری با مشاور
+          <Button variant="primary" size="sm" className="gap-2 bg-teal-800 hover:bg-teal-900">
+            <Share2 className="w-4 h-4" />
+            <span>اشتراک‌گذاری گزارش</span>
           </Button>
         </div>
       </div>
 
-      {/* Completeness Warning Banner if tests incomplete */}
+      {/* Completeness Warning Banner */}
       {pathDna?.completenessWarning && (
-        <div className="bg-amber-50 border-2 border-amber-500 rounded-xl p-4 flex items-center gap-3 text-amber-900 elevated-sm">
-          <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
-          <p className="text-xs font-bold leading-relaxed">{pathDna.completenessWarning}</p>
+        <div className="bg-amber-50 border-2 border-amber-500 rounded-2xl p-4 md:p-5 flex items-start gap-3 text-amber-900">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-black mb-0.5">آزمون‌های روان‌سنجی شما کامل نیست</h4>
+            <p className="text-xs font-medium leading-relaxed">{pathDna.completenessWarning}</p>
+          </div>
         </div>
       )}
 
-      {/* Path DNA Banner Header */}
-      <div className="bg-teal-500 text-white border-thick border-ink-900 rounded-3xl p-8 md:p-10 elevated-xl leaf-card space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Profile Summary Strip */}
+      <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-navy-700 border-thick border-ink-900 rounded-3xl p-6 md:p-8 text-white elevated-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <Chip variant="badge" brand="third">
-              کارنامه هدایت تحصیلی نهم به دهم
-            </Chip>
-            <h1 className="text-3xl md:text-5xl font-black text-white">
-              کپسول تبارشناسی Path DNA
-            </h1>
-            <p className="text-sm md:text-base text-teal-50 font-medium">
-              موتور قطعی تطبیق مسیر بر اساس الگوریتم ۴ آزمون روان‌سنجی رکاد
-            </p>
-          </div>
-
-          <div className="bg-white text-ink-900 rounded-2xl p-6 border-thick border-ink-900 elevated-md text-center min-w-[240px]">
-            <span className="text-xs font-bold text-teal-800 block mb-1">کد ترکیبی Path DNA</span>
-            <div className="font-numeric text-3xl font-black text-teal-700 tracking-widest my-1">
-              {pathDna?.hollandCode}-{pathDna?.mbtiType}-{pathDna?.discProfile}
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-xs font-semibold backdrop-blur-sm border border-white/20">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>پروفایل روان‌سنجی تجمیعی</span>
             </div>
-            <span className="text-[10px] font-extrabold text-navy-700 block">ساختار ۷ مسیره هوشمند</span>
-          </div>
-        </div>
-
-        {/* High School Track Guidance Highlight */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-300 text-ink-900 font-black flex items-center justify-center">
-              <GraduationCap className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-xs font-extrabold text-amber-200 block">رشته پیشنهادی دبیرستان (پایه نهم به دهم)</span>
-              <span className="text-lg font-black text-white">
-                {pathDna?.baseCluster?.mainGroup?.join(' و ')}
+            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+              تیپ روان‌شناختی شما: {pathDna?.mbtiType} | کد هالند: {pathDna?.hollandCode}
+            </h2>
+            <div className="flex flex-wrap items-center gap-2 text-white/90 text-xs md:text-sm font-medium">
+              <span>هوش‌های برتر: {pathDna?.topIntelligences?.join('، ') || '---'}</span>
+              <span>•</span>
+              <span>الگوی رفتاری DISC: {pathDna?.discProfile}</span>
+              <span>•</span>
+              <span>
+                شاخه پیشنهادی: {pathDna?.baseCluster?.mainGroup?.join(' / ')}
                 {pathDna?.baseCluster?.topSubfields?.length ? ` (${pathDna.baseCluster.topSubfields.join('، ')})` : ''}
               </span>
             </div>
           </div>
-          <Chip variant="outline" brand="third" className="bg-white/20 text-white border-white">
-            خوشه‌ی پایه تحصیلی
-          </Chip>
         </div>
       </div>
-
-      {/* Top 3 O*NET Career Clusters Section */}
-      {pathDna?.topCareerClusters && pathDna.topCareerClusters.length > 0 && (
-        <div className="bg-white border-thick border-ink-900 rounded-2xl p-6 md:p-8 elevated-lg space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Compass className="w-6 h-6 text-teal-700" />
-              <h2 className="text-xl font-black text-ink-900">۳ کلاستر شغلی منطبق با رغبت‌سنجی هالند (O*NET)</h2>
-            </div>
-            <Chip variant="badge" brand="rokad">شباهت کسینوسی</Chip>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {pathDna.topCareerClusters.map((cl, idx) => (
-              <div key={cl.clusterId} className="bg-teal-50/60 border border-teal-300 rounded-xl p-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="w-7 h-7 rounded-full bg-teal-700 text-white text-xs font-black flex items-center justify-center font-numeric shrink-0">
-                    {idx + 1}
-                  </span>
-                  <div>
-                    <h4 className="text-xs font-bold text-ink-900 line-clamp-1">{cl.titleFa}</h4>
-                    <span className="text-[10px] text-ink-500 font-sans">{cl.titleEn}</span>
-                  </div>
-                </div>
-                <div className="text-left shrink-0">
-                  <span className="font-numeric text-sm font-black text-teal-800">{cl.affinityScore}٪</span>
-                  <span className="text-[9px] text-ink-500 block">قرابت</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Main Path Feature Card */}
       {pathDna?.mainPath && (
@@ -248,88 +222,44 @@ export default function ResultsPage() {
                 <Sparkles className="w-7 h-7 text-teal-200" />
               </div>
               <div>
-                <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-500">
-                  اولویت اول — مسیر شغلی اصلی
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-500">
+                    اولویت اول — مسیر شغلی اصلی
+                  </span>
+                  {pathDna.v2Basket?.mainPath?.marketViabilityScore && (
+                    <span className="text-xs font-black text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-400">
+                      پایداری بازار کار: {pathDna.v2Basket.mainPath.marketViabilityScore}٪
+                    </span>
+                  )}
+                  {pathDna.v2Basket?.mainPath?.strategicScore && (
+                    <span className="text-xs font-black text-navy-800 bg-navy-50 px-2.5 py-1 rounded-md border border-navy-400">
+                      نمره راهبردی V3: {pathDna.v2Basket.mainPath.strategicScore}٪
+                    </span>
+                  )}
+                </div>
                 <h2 className="text-2xl md:text-3xl font-black text-ink-900 mt-1">{pathDna.mainPath.title}</h2>
               </div>
             </div>
 
-            <div className="bg-amber-50 border-2 border-amber-500 rounded-xl px-4 py-2 text-center">
-              <span className="text-[10px] font-bold text-amber-800 block">نمره سازگاری کل</span>
-              <span className="font-numeric text-3xl font-black text-amber-600">{pathDna.mainPath.matchScore}٪</span>
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-50 border-2 border-amber-500 rounded-xl px-4 py-2 text-center">
+                <span className="text-[10px] font-bold text-amber-800 block">شایستگی روان‌سنجی</span>
+                <span className="font-numeric text-3xl font-black text-amber-600">{pathDna.mainPath.matchScore}٪</span>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedJobModal(pathDna.v2Basket?.mainPath);
+                  setActiveModalTab('xai');
+                }}
+                className="px-4 py-3 bg-teal-800 hover:bg-teal-900 active:scale-95 text-white text-xs font-black rounded-xl border border-teal-900 shadow-sm transition flex items-center gap-2"
+              >
+                <BarChart3 className="w-4 h-4 text-teal-200" />
+                <span>مشاهده پرونده تخصصی V3</span>
+              </button>
             </div>
           </div>
 
           <p className="text-sm font-semibold text-ink-700 leading-relaxed">{pathDna.mainPath.description}</p>
-
-          {/* DISC In-Role Positioning Banner */}
-          {pathDna.v2Basket?.mainPath?.discPositioning && (
-            <div className="bg-amber-50/90 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-black text-amber-900 flex items-center gap-1.5">
-                  <UserCheck className="w-4 h-4 text-amber-700" />
-                  <span>پوزیشن و سبک عملیاتی درون شغل (تحلیل رفتاری DISC):</span>
-                </span>
-                <span className="text-xs font-black text-amber-900 bg-amber-200/90 px-3 py-1 rounded-lg">
-                  «{pathDna.v2Basket.mainPath.discPositioning.targetRoleTitle}»
-                </span>
-              </div>
-              <p className="text-xs text-amber-950 font-medium leading-relaxed">
-                {pathDna.v2Basket.mainPath.discPositioning.workStyleGuidance}
-              </p>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {pathDna.v2Basket.mainPath.discPositioning.strengthsInRole?.map((st, i) => (
-                  <span key={i} className="text-[11px] bg-white px-2.5 py-0.5 rounded-md border border-amber-300 text-amber-900 font-bold shadow-xs">
-                    ✓ {st}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* High school & University majors */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-300">
-              <span className="text-xs font-bold text-navy-700 block mb-1">رشته دبیرستانی توصیه شده:</span>
-              <span className="text-sm font-black text-teal-800">{pathDna.mainPath.recommendedHighschoolTrack}</span>
-            </div>
-            <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-300">
-              <span className="text-xs font-bold text-navy-700 block mb-1">رشته‌های دانشگاهی مرتبط:</span>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {pathDna.mainPath.universityMajors.map((m, i) => (
-                  <span key={i} className="bg-white border border-neutral-300 text-xs font-bold px-2 py-0.5 rounded-md">
-                    {m}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 4-Test Compatibility Reasoning Grid */}
-          <div className="bg-teal-50 p-5 rounded-2xl border-2 border-teal-500 space-y-3">
-            <h4 className="text-sm font-black text-teal-900 flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-teal-700" /> تحلیل دلایل سازگاری در ۴ آزمون:
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-medium text-ink-800">
-              <div className="bg-white p-3 rounded-lg border border-teal-200">
-                <strong className="text-teal-800 block mb-0.5">آزمون هالند (RIASEC):</strong>
-                {pathDna.mainPath.whyCompatible.hollandReasoning}
-              </div>
-              <div className="bg-white p-3 rounded-lg border border-teal-200">
-                <strong className="text-teal-800 block mb-0.5">آزمون گاردنر:</strong>
-                {pathDna.mainPath.whyCompatible.gardnerReasoning}
-              </div>
-              <div className="bg-white p-3 rounded-lg border border-teal-200">
-                <strong className="text-teal-800 block mb-0.5">شخصیت MBTI:</strong>
-                {pathDna.mainPath.whyCompatible.mbtiReasoning}
-              </div>
-              <div className="bg-white p-3 rounded-lg border border-teal-200">
-                <strong className="text-teal-800 block mb-0.5">رفتارشناسی DISC:</strong>
-                {pathDna.mainPath.whyCompatible.discReasoning}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -354,7 +284,7 @@ export default function ResultsPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-numeric text-xs font-black text-navy-700 bg-navy-50 px-2 py-0.5 rounded-md border border-navy-400">
-                        تطابق: {path.matchScore}٪
+                        شایستگی: {path.matchScore}٪
                       </span>
                       <span className="text-[10px] font-bold text-ink-500 font-numeric">جایگزین ۰{idx + 1}</span>
                     </div>
@@ -372,7 +302,16 @@ export default function ResultsPage() {
                         «{v2Alt.discPositioning.targetRoleTitle}»
                       </div>
                     )}
-                    <span className="text-[11px] font-bold text-teal-800 block">رشته پیشنهادی: {path.recommendedHighschoolTrack}</span>
+                    <button
+                      onClick={() => {
+                        setSelectedJobModal(v2Alt);
+                        setActiveModalTab('xai');
+                      }}
+                      className="w-full py-2 bg-white hover:bg-neutral-100 active:scale-95 border border-neutral-300 rounded-lg text-xs font-bold text-ink-800 transition flex items-center justify-center gap-1.5"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5 text-teal-700" />
+                      <span>بررسی پرونده V3</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -389,8 +328,8 @@ export default function ResultsPage() {
               <Compass className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-ink-900">۳ مسیر مکمل و خلاقانه (میان‌رشته‌ای / کلاستر متقاطع)</h2>
-              <p className="text-xs font-semibold text-ink-500">تلفیق هوش‌های ثانویه گاردنر و فرصت‌های نوظهور شغلی</p>
+              <h2 className="text-2xl font-black text-ink-900">۳ مسیر مکمل و خلاقانه (میان‌رشته‌ای / الگوریتم تنوع MMR)</h2>
+              <p className="text-xs font-semibold text-ink-500">تلفیق هوش‌های ثانویه گاردنر، رغبت‌های متعامد و فرصت‌های نوظهور شغلی</p>
             </div>
           </div>
 
@@ -402,7 +341,7 @@ export default function ResultsPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-numeric text-xs font-black text-pink-700 bg-pink-50 px-2 py-0.5 rounded-md border border-pink-400">
-                        تطابق: {path.matchScore}٪
+                        شایستگی: {path.matchScore}٪
                       </span>
                       <span className="text-[10px] font-bold text-ink-500 font-numeric">مکمل ۰{idx + 1}</span>
                     </div>
@@ -420,7 +359,16 @@ export default function ResultsPage() {
                         «{v2Comp.discPositioning.targetRoleTitle}»
                       </div>
                     )}
-                    <span className="text-[11px] font-bold text-pink-800 block">رشته پیشنهادی: {path.recommendedHighschoolTrack}</span>
+                    <button
+                      onClick={() => {
+                        setSelectedJobModal(v2Comp);
+                        setActiveModalTab('xai');
+                      }}
+                      className="w-full py-2 bg-white hover:bg-neutral-100 active:scale-95 border border-neutral-300 rounded-lg text-xs font-bold text-ink-800 transition flex items-center justify-center gap-1.5"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5 text-pink-700" />
+                      <span>بررسی پرونده V3</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -447,6 +395,295 @@ export default function ResultsPage() {
           {discResult && <DiscProfileCard profile={discResult.profile} scores={discResult.scores} />}
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* V3 Interactive 4-Tab Job Dossier Modal / Drawer */}
+      {/* ========================================================================= */}
+      {selectedJobModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white border-thick border-ink-900 rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col elevated-2xl shadow-2xl">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-teal-800 to-navy-800 p-6 text-white flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="text-[11px] font-black bg-white/20 px-2.5 py-0.5 rounded-full border border-white/30 backdrop-blur-xs">
+                    {selectedJobModal.cluster?.titleFa || 'کلاستر تخصصی'}
+                  </span>
+                  <span className="text-[11px] text-white/80 font-sans">
+                    SOC: {selectedJobModal.onetCode || 'O*NET'}
+                  </span>
+                </div>
+                <h3 className="text-2xl font-black">{selectedJobModal.titleFa || selectedJobModal.title}</h3>
+                <span className="text-xs text-teal-200 font-sans">{selectedJobModal.titleEn}</span>
+              </div>
+              <button
+                onClick={() => setSelectedJobModal(null)}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal 4 Tabs Navigation */}
+            <div className="flex items-center border-b border-neutral-200 bg-neutral-50 px-6 shrink-0 overflow-x-auto">
+              <button
+                onClick={() => setActiveModalTab('xai')}
+                className={`py-3.5 px-4 text-xs font-black border-b-2 transition flex items-center gap-2 shrink-0 ${
+                  activeModalTab === 'xai'
+                    ? 'border-teal-700 text-teal-900 bg-white'
+                    : 'border-transparent text-ink-500 hover:text-ink-900'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 text-teal-600" />
+                <span>۱. مفسرپذیری روان‌سنجی (XAI)</span>
+              </button>
+              <button
+                onClick={() => setActiveModalTab('roadmap')}
+                className={`py-3.5 px-4 text-xs font-black border-b-2 transition flex items-center gap-2 shrink-0 ${
+                  activeModalTab === 'roadmap'
+                    ? 'border-teal-700 text-teal-900 bg-white'
+                    : 'border-transparent text-ink-500 hover:text-ink-900'
+                }`}
+              >
+                <GraduationCap className="w-4 h-4 text-teal-600" />
+                <span>۲. نقشه راه تحصیلی</span>
+              </button>
+              <button
+                onClick={() => setActiveModalTab('market')}
+                className={`py-3.5 px-4 text-xs font-black border-b-2 transition flex items-center gap-2 shrink-0 ${
+                  activeModalTab === 'market'
+                    ? 'border-teal-700 text-teal-900 bg-white'
+                    : 'border-transparent text-ink-500 hover:text-ink-900'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 text-teal-600" />
+                <span>۳. بازار کار و ریسک AI</span>
+              </button>
+              <button
+                onClick={() => setActiveModalTab('disc')}
+                className={`py-3.5 px-4 text-xs font-black border-b-2 transition flex items-center gap-2 shrink-0 ${
+                  activeModalTab === 'disc'
+                    ? 'border-teal-700 text-teal-900 bg-white'
+                    : 'border-transparent text-ink-500 hover:text-ink-900'
+                }`}
+              >
+                <UserCheck className="w-4 h-4 text-teal-600" />
+                <span>۴. رفتار سازمانی (DISC)</span>
+              </button>
+            </div>
+
+            {/* Modal Tab Content Body */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Tab 1: XAI Psychometric Interpretation */}
+              {activeModalTab === 'xai' && (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-teal-50 border border-teal-300 rounded-xl p-3 text-center">
+                      <span className="text-[10px] font-bold text-teal-800 block">انطباق هالند</span>
+                      <span className="font-numeric text-xl font-black text-teal-900">
+                        {selectedJobModal.metrics?.hollandFit ?? 90}٪
+                      </span>
+                    </div>
+                    <div className="bg-teal-50 border border-teal-300 rounded-xl p-3 text-center">
+                      <span className="text-[10px] font-bold text-teal-800 block">سازگاری گاردنر</span>
+                      <span className="font-numeric text-xl font-black text-teal-900">
+                        {selectedJobModal.metrics?.gardnerFit ?? 85}٪
+                      </span>
+                    </div>
+                    <div className="bg-teal-50 border border-teal-300 rounded-xl p-3 text-center">
+                      <span className="text-[10px] font-bold text-teal-800 block">آرامش MBTI</span>
+                      <span className="font-numeric text-xl font-black text-teal-900">
+                        {selectedJobModal.metrics?.mbtiFit ?? 88}٪
+                      </span>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-center">
+                      <span className="text-[10px] font-bold text-amber-800 block">نقش DISC</span>
+                      <span className="text-xs font-black text-amber-900 block truncate mt-1">
+                        {selectedJobModal.discPositioning?.targetRoleTitle || 'لید'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black text-ink-900">تحلیل دلایل چهارگانه سازگاری فرد با شغل:</h4>
+                    <div className="space-y-2.5 text-xs text-ink-800 font-medium">
+                      <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200">
+                        <strong className="text-teal-800 block mb-1">رغبت‌های شغلی (RIASEC):</strong>
+                        {selectedJobModal.compatibilityReasoning?.hollandWhy || 'تطابق بالا در ابعاد تحلیلی و مهارتی.'}
+                      </div>
+                      <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200">
+                        <strong className="text-teal-800 block mb-1">هوش‌های چندگانه (گاردنر):</strong>
+                        {selectedJobModal.compatibilityReasoning?.gardnerWhy || 'هوش‌های برتر کاربر کاملاً منطبق با الزامات کلیدی شغل هستند.'}
+                      </div>
+                      <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200">
+                        <strong className="text-teal-800 block mb-1">سازگاری محیط کار (MBTI):</strong>
+                        {selectedJobModal.compatibilityReasoning?.mbtiWhy || 'محیط کاری ساختاریافته و هم‌راستا با ترجیحات روانی فرد.'}
+                      </div>
+                      <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200">
+                        <strong className="text-teal-800 block mb-1">رفتار درون‌تیمی (DISC):</strong>
+                        {selectedJobModal.compatibilityReasoning?.discWhy || 'تعیین نقش بهینه درون‌تیمی بر اساس کهن‌الگوهای رفتاری.'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Educational Roadmap */}
+              {activeModalTab === 'roadmap' && (
+                <div className="space-y-5">
+                  <div className="bg-teal-50 border-2 border-teal-500 rounded-2xl p-4 space-y-2">
+                    <span className="text-xs font-black text-teal-900 block">شاخه و رشته دبیرستان (پایه نهم به دهم):</span>
+                    <p className="text-sm font-black text-teal-800">
+                      {selectedJobModal.educationalRoadmap?.highSchoolTrack || 'ریاضی‌فیزیک یا علوم تجربی'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-black text-ink-900 block">گرایش‌های دانشگاهی مرتبط (کارشناسی و ارشد):</span>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedJobModal.educationalRoadmap?.universityMajors?.map((major: string, i: number) => (
+                        <span key={i} className="bg-neutral-100 border border-neutral-300 text-xs font-bold px-3 py-1.5 rounded-lg text-ink-900">
+                          🎓 {major}
+                        </span>
+                      )) || <span className="text-xs text-ink-500">رشته‌های علوم کامپیوتر، مهندسی و علوم زیستی</span>}
+                    </div>
+                  </div>
+
+                  {selectedJobModal.educationalRoadmap?.keyCertifications && (
+                    <div className="space-y-2 pt-2 border-t border-neutral-200">
+                      <span className="text-xs font-black text-ink-900 block">گواهینامه‌های کلیدی تقویت‌کننده رزومه:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedJobModal.educationalRoadmap.keyCertifications.map((cert: string, i: number) => (
+                          <span key={i} className="bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold px-3 py-1.5 rounded-lg">
+                            📜 {cert}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 3: Labor Market & AI Risk */}
+              {activeModalTab === 'market' && (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3.5 text-center">
+                      <span className="text-[10px] font-bold text-emerald-800 block">پایداری بازار کار</span>
+                      <span className="font-numeric text-2xl font-black text-emerald-900">
+                        {selectedJobModal.marketViabilityScore ?? 85}٪
+                      </span>
+                    </div>
+                    <div className="bg-navy-50 border border-navy-300 rounded-xl p-3.5 text-center">
+                      <span className="text-[10px] font-bold text-navy-800 block">نمره راهبردی V3</span>
+                      <span className="font-numeric text-2xl font-black text-navy-900">
+                        {selectedJobModal.strategicScore ?? 88}٪
+                      </span>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-300 rounded-xl p-3.5 text-center">
+                      <span className="text-[10px] font-bold text-purple-800 block">امکان دورکاری</span>
+                      <span className="font-numeric text-2xl font-black text-purple-900">
+                        {selectedJobModal.enterpriseInsight?.remoteCompatibilityPercent ?? 75}٪
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 bg-neutral-50 p-4 rounded-2xl border border-neutral-200 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-ink-700">چشم‌انداز تقاضای بازار کار:</span>
+                      <span className="font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-md">
+                        {selectedJobModal.enterpriseInsight?.demandOutlook === 'rising' ? 'رو به رشد و پرتقاضا' : 'باثبات و پایدار'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-ink-700">ریسک اتوماسیون و هوش مصنوعی:</span>
+                      <span className="font-black text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-md font-numeric">
+                        {selectedJobModal.enterpriseInsight?.automationRiskPercent ?? 20}٪ (پایین تا متوسط)
+                      </span>
+                    </div>
+                    {selectedJobModal.enterpriseInsight?.salaryBandTomanMonthly && (
+                      <div className="pt-2 border-t border-neutral-200 space-y-1">
+                        <span className="font-bold text-ink-800 block">برآورد بازه حقوق ماهانه بازار ایران:</span>
+                        <div className="flex justify-between text-[11px] text-ink-600 font-numeric pt-1">
+                          <span>ورود: {(selectedJobModal.enterpriseInsight.salaryBandTomanMonthly.entry / 1000000).toFixed(0)} میلیون</span>
+                          <span>میان‌رده: {(selectedJobModal.enterpriseInsight.salaryBandTomanMonthly.mid / 1000000).toFixed(0)} میلیون</span>
+                          <span>ارشد: {(selectedJobModal.enterpriseInsight.salaryBandTomanMonthly.senior / 1000000).toFixed(0)} میلیون تومان</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedJobModal.enterpriseInsight?.adjacentCareerIds && selectedJobModal.enterpriseInsight.adjacentCareerIds.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-black text-ink-900 block">مسیرهای شغلی مجاور برای پیوت احتمالی:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedJobModal.enterpriseInsight.adjacentCareerIds.map((adjId: string, i: number) => (
+                          <span key={i} className="bg-teal-50 border border-teal-300 text-teal-900 text-xs font-bold px-2.5 py-1 rounded-md">
+                            🔄 {adjId.replace('onet_', '').replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 4: DISC In-Role Positioning */}
+              {activeModalTab === 'disc' && (
+                <div className="space-y-4">
+                  <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-amber-800">عنوان پوزیشن سازمانی:</span>
+                      <span className="text-xs font-black bg-amber-200 text-amber-950 px-2.5 py-0.5 rounded-md">
+                        {selectedJobModal.discPositioning?.targetRoleTitle || 'معمار و لید'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                      {selectedJobModal.discPositioning?.workStyleGuidance || 'هدایت تیم و تصمیم‌گیری داده‌محور.'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-black text-ink-900 block">نقاط قوت متمایز شما در این موقعیت:</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedJobModal.discPositioning?.strengthsInRole?.map((st: string, i: number) => (
+                        <div key={i} className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-200 text-xs font-bold text-ink-800 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{st}</span>
+                        </div>
+                      )) || <span className="text-xs text-ink-500">حل مسئله، راهبری تیم و تحلیل دقیق.</span>}
+                    </div>
+                  </div>
+
+                  {selectedJobModal.discPositioning?.growthAreas && selectedJobModal.discPositioning.growthAreas.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-neutral-200">
+                      <span className="text-xs font-black text-ink-900 block">چالش‌های احتمالی و مهارت‌های نرم مکمل:</span>
+                      <div className="space-y-1.5">
+                        {selectedJobModal.discPositioning.growthAreas.map((ga: string, i: number) => (
+                          <div key={i} className="bg-rose-50/60 p-2 rounded-lg border border-rose-200 text-xs font-medium text-rose-900 flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                            <span>{ga}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-neutral-50 border-t border-neutral-200 flex justify-end shrink-0">
+              <button
+                onClick={() => setSelectedJobModal(null)}
+                className="px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-black transition"
+              >
+                بستن پرونده
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

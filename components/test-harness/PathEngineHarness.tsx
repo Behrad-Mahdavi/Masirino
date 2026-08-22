@@ -874,13 +874,46 @@ export const PathEngineHarness: React.FC = () => {
           {/* Tab 1: Summary 7-Path Basket */}
           {activeTab === 'summary' && (
             <div className="space-y-6">
+              {/* V3 Adaptive Weights Banner */}
+              {v2Output.adaptiveWeightsUsed && (
+                <div className="bg-neutral-900 text-white rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-bold">وزن‌دهی تطبیقی پویا (Adaptive Priors V3):</span>
+                  </div>
+                  <div className="flex items-center gap-3 font-numeric font-bold">
+                    <span className="bg-neutral-800 px-2.5 py-1 rounded-lg text-teal-300">
+                      هولند: {(v2Output.adaptiveWeightsUsed.holland * 100).toFixed(1)}٪
+                    </span>
+                    <span className="bg-neutral-800 px-2.5 py-1 rounded-lg text-pink-300">
+                      گاردنر: {(v2Output.adaptiveWeightsUsed.gardner * 100).toFixed(1)}٪
+                    </span>
+                    <span className="bg-neutral-800 px-2.5 py-1 rounded-lg text-navy-300">
+                      MBTI: {(v2Output.adaptiveWeightsUsed.mbti * 100).toFixed(1)}٪
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Main Path Card (Top 1) */}
               <div className="bg-gradient-to-br from-teal-50 via-white to-amber-50/30 rounded-3xl p-6 border-2 border-teal-600 shadow-md space-y-4 relative overflow-hidden">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-700 text-white rounded-full text-xs font-black">
-                      <Award className="w-3.5 h-3.5 text-amber-300" />
-                      <span>مسیر شغلی اصلی (اولویت ۱)</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-700 text-white rounded-full text-xs font-black">
+                        <Award className="w-3.5 h-3.5 text-amber-300" />
+                        <span>مسیر شغلی اصلی (اولویت ۱)</span>
+                      </div>
+                      {v2Output.basket.mainPath.marketViabilityScore && (
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full font-numeric">
+                          پایداری بازار: {v2Output.basket.mainPath.marketViabilityScore}٪
+                        </span>
+                      )}
+                      {v2Output.basket.mainPath.strategicScore && (
+                        <span className="text-[11px] font-bold text-navy-800 bg-navy-100 px-2.5 py-0.5 rounded-full font-numeric">
+                          نمره راهبردی: {v2Output.basket.mainPath.strategicScore}٪
+                        </span>
+                      )}
                     </div>
                     <h2 className="text-xl font-black text-ink-900 pt-1">
                       {v2Output.basket.mainPath.titleFa}
@@ -894,7 +927,7 @@ export const PathEngineHarness: React.FC = () => {
                     <div className="text-2xl font-black text-teal-700 font-numeric">
                       {v2Output.basket.mainPath.matchScore}٪
                     </div>
-                    <span className="text-[10px] font-bold text-ink-500">نمره سازگاری کل</span>
+                    <span className="text-[10px] font-bold text-ink-500">شایستگی روان‌سنجی</span>
                   </div>
                 </div>
 
@@ -968,7 +1001,12 @@ export const PathEngineHarness: React.FC = () => {
                           <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
                             {alt.cluster.titleFa}
                           </span>
-                          <span className="text-xs font-black text-teal-700 font-numeric">{alt.matchScore}٪</span>
+                          <div className="flex items-center gap-1 font-numeric">
+                            <span className="text-xs font-black text-teal-700">{alt.matchScore}٪</span>
+                            {alt.strategicScore && (
+                              <span className="text-[10px] text-navy-600 font-bold">({alt.strategicScore}٪ V3)</span>
+                            )}
+                          </div>
                         </div>
                         <h3 className="text-sm font-black text-ink-900 pt-1">{alt.titleFa}</h3>
                         <p className="text-[11px] text-ink-600 line-clamp-2">{alt.description}</p>
@@ -983,11 +1021,16 @@ export const PathEngineHarness: React.FC = () => {
                 </div>
               </div>
 
-              {/* 3 Complementary Paths (Interdisciplinary) */}
+              {/* 3 Complementary Paths (MMR Multimodal 20D) */}
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-black text-ink-900">
-                  <span className="w-2 h-4 bg-pink-600 rounded-full" />
-                  <span>۳ مسیر مکمل و خلاقانه (میان‌رشته‌ای با هوش‌های ثانویه)</span>
+                <div className="flex items-center justify-between text-sm font-black text-ink-900">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-4 bg-pink-600 rounded-full" />
+                    <span>۳ مسیر مکمل و خلاقانه (الگوریتم تنوع MMR در فضای ۲۰ بعدی)</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded-full font-mono">
+                    λ = 0.65 (MMR)
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {v2Output.basket.complementaryPaths.map((comp) => (
@@ -997,7 +1040,12 @@ export const PathEngineHarness: React.FC = () => {
                           <span className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded">
                             {comp.cluster.titleFa}
                           </span>
-                          <span className="text-xs font-black text-pink-700 font-numeric">{comp.matchScore}٪</span>
+                          <div className="flex items-center gap-1 font-numeric">
+                            <span className="text-xs font-black text-pink-700">{comp.matchScore}٪</span>
+                            {comp.mmrScore !== undefined && (
+                              <span className="text-[10px] text-pink-500 font-mono">MMR: {comp.mmrScore}</span>
+                            )}
+                          </div>
                         </div>
                         <h3 className="text-sm font-black text-ink-900 pt-1">{comp.titleFa}</h3>
                         <p className="text-[11px] text-ink-600 line-clamp-2">{comp.description}</p>

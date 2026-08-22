@@ -167,22 +167,58 @@ p_{\text{main}} = \arg\max_{j \in \mathcal{J}} \text{MatchScore}(U, j) \\
 
 ---
 
-### ۶. نقشه راه فنی جهت ارتقا به معماری تراز اول جهانی (Enterprise Roadmap to V3)
+---
+
+### ۶. معماری پیاده‌سازی‌شده موتور چندمعیاره پیشرفته (PathEngine V3 Architecture)
 
 ```
-                       [ PathEngine V3 Roadmap ]
-                                  │
-    ┌─────────────────────────────┼─────────────────────────────┐
-    ▼                             ▼                             ▼
-[Differentiable Layer]     [Graph Diversity]          [Labor Market-Fit]
- - Learning-to-Rank        - Vector MMR Optimization  - Inflation/Wage API
- - LambdaMART Weights      - Cross-Cluster Embeddings - AI Automation Risk
- - A/B Bayesian Tuning     - Skill Taxonomy Mapping   - Regional Demand Vector
+                       [ PathEngine V3 Complete Pipeline ]
+                                       │
+     ┌─────────────────────────────────┼─────────────────────────────────┐
+     ▼                                 ▼                                 ▼
+[Adaptive Priors Layer]       [20D MMR Diversity]           [Orthogonal Dual-Score]
+ - Alpha_H (Holland Spread)    - R^20 Multimodal Vector      - PsychometricFit [0..100]
+ - Alpha_G (Gardner Variance)  - L2 Unit Normalization       - MarketViabilityScore [0..100]
+ - Alpha_M (MBTI Intensity)    - Fast O(1) Dot-Product Sim   - StrategicScore = 0.7*P + 0.3*M
+ - Dynamic Re-normalization    - Lambda=0.65 Diversity      - AI Risk & Career Pivot Map
 ```
 
-1. **مدل‌سازی پویای بازار کار و ریسک اتوماسیون (Labor Market & AI Risk Layer):**
-   * اعمال ضریب تعدیل بر مبنای متغیرهای `automationRiskPercent` (شاخص Frey-Osborne) و `demandOutlook` از ساختار داده `enterpriseInsight` بر نمره نهایی $\text{MatchScore}$.
-2. **ارتقای الگوریتم تنوع به Maximal Marginal Relevance (MMR):**
-   * جایگزینی فیلتر حریصانه کلاسترها با محاسبه هم‌زمان شباهت و فاصله تعبیه‌سازی‌ها در فضای برداری ویژگی‌های مهارت.
-3. **کالیبراسیون داده‌محور اوزان فرمول (Learning-to-Rank / LambdaMART):**
-   * بهینه‌سازی ضرایب ثابت ($0.35, 0.35, 0.30$) با داده‌های دنیای واقعی از طریق ایجاد یک بازخورد حلقه‌بسته (Continuous Feedback Loop) روی رضایت و ماندگاری شغلی فارغ‌التحصیلان.
+#### ۶.۱. لایه وزن‌دهی تطبیقی بر پایه قطعیت کاربر (Confidence-Weighted Adaptive Priors)
+به جای اوزان ثابت، ضرایب قابلیت اتکا ($\alpha_k \in [0.3, 1.0]$) به صورت پویا محاسبه می‌شوند:
+* **قطعیت هالند ($\alpha_H$):** $\alpha_H = \max\left(0.4, \min\left(1.0, \frac{\text{Score}_{\max} - \text{Score}_{\min}}{100}\right)\right)$
+* **قطعیت گاردنر ($\alpha_G$):** $\alpha_G = \max\left(0.4, \min\left(1.0, \frac{\sigma_{\text{Gardner}}^2}{1.5}\right)\right)$
+* **قطعیت MBTI ($\alpha_M$):** $\alpha_M = \max\left(0.3, \min\left(1.0, \frac{1}{4}\sum_{a} \frac{I_a}{100}\right)\right)$
+* **نرمال‌سازی مجدد:** $W_k^* = \frac{W_k^{\text{base}} \cdot \alpha_k}{\sum_{m \in \{H,G,M\}} W_m^{\text{base}} \cdot \alpha_m}$ با اوزان پایه $[0.35, 0.35, 0.30]$.
+
+---
+
+#### ۶.۲. بردار تعبیه‌سازی چندوجهی ۲۰ بعدی و تنوع بیشینه حاشیه‌ای (20D Multimodal MMR)
+هر شغل $j$ در یک فضای برداری ۲۰ بعدی $\mathbb{R}^{20}$ مدل‌سازی می‌شود:
+$$V_j^{\text{raw}} = \Big[ 0.45 \cdot \hat{v}_{\text{RIASEC}} (\mathbb{R}^6) \parallel 0.35 \cdot \hat{v}_{\text{Gardner}} (\mathbb{R}^8) \parallel 0.20 \cdot \hat{v}_{\text{WorkEnv}} (\mathbb{R}^6) \Big]$$
+با نرمال‌سازی واحد به طول اقلیدسی:
+$$V_j = \frac{V_j^{\text{raw}}}{\|V_j^{\text{raw}}\|_2} \implies \|V_j\|_2 = 1.0$$
+که در نتیجه شباهت کسینوسی میان دو شغل صرفاً با ضرب داخلی (Dot Product) در زمان $\mathcal{O}(1)$ محاسبه می‌شود:
+$$\text{Sim}(j_1, j_2) = \langle V_{j_1}, V_{j_2} \rangle$$
+
+انتخاب ۳ مسیر مکمل سبد با تابع بهینه‌سازی MMR با ضریب $\lambda = 0.65$ و قید کلاسترهای غیرتکراری انجام می‌پذیرد:
+$$\text{MMR}(c) = 0.65 \cdot \left(\frac{\text{MatchScore}(c)}{100}\right) - 0.35 \cdot \max_{s \in \mathcal{B}} \langle V_c, V_s \rangle$$
+
+---
+
+#### ۶.۳. رویکرد دو محوره مستقل و نمره راهبردی (Dual-Score & Strategic Viability)
+برای جلوگیری از مخدوش شدن استعداد ذاتی فرد، نمره روان‌سنجی از ارزیابی بازار کار تفکیک می‌شود:
+* **نمره شایستگی روان‌سنجی ($\text{PsychometricFit} \in [0, 100]$):** برآیند هالند، گاردنر و MBTI با اوزان تطبیقی.
+* **شاخص پایداری بازار کار ($\text{MarketViabilityScore} \in [10, 100]$):**
+  $$\text{MarketViabilityScore} = \text{round}\Big( 0.40 \cdot (100 - \text{AutomationRisk}) + 0.35 \cdot \text{DemandScore} + 0.25 \cdot \text{RemoteScore} \Big)$$
+* **نمره راهبردی تلفیقی V3 ($\text{StrategicScore} \in [0, 100]$):**
+  $$\text{StrategicScore} = \text{round}\Big( 0.70 \cdot \text{PsychometricFit} + 0.30 \cdot \text{MarketViabilityScore} \Big)$$
+
+---
+
+#### ۶.۴. ساختار افشای تدریجی اطلاعات در رابط کاربری (Progressive Disclosure UI)
+* **لایه ۱ (Card Glance):** نمایش سریع نمرات دوگانه، برچسب‌های پایداری بازار، شاخه نهم به دهم و نقش رفتاری.
+* **لایه ۲ (4-Tab Interactive Dossier Modal):**
+  * **تب ۱: مفسرپذیری روان‌سنجی (XAI):** تفکیک نمرات ۴گانه و دلایل ساختاریافته ریاضی برای هر آزمون.
+  * **تب ۲: نقشه راه تحصیلی:** هدایت پایه نهم به دهم، گرایش‌های دانشگاهی تا تحصیلات تکمیلی، و گواهینامه‌های کلیدی رزومه‌ساز.
+  * **تب ۳: بازار کار و ریسک هوش مصنوعی:** رنج حقوقی ماهیانه بازار ایران، درصد امکان دورکاری، و مسیرهای مجاور جهت پیوت شغلی (`adjacentCareerIds`).
+  * **تب ۴: جایگاه درون‌تیمی (DISC):** تبیین عنوان نقش سازمانی، نقاط قوت عملیاتی و راهکارهای رشد رفتاری.

@@ -10,13 +10,14 @@ import {
   GardnerVector,
   JobWorkEnvironmentVector,
   DiscRoleMapping,
+  EnterpriseLaborInsight,
   MBTI_BEHAVIORAL_TARGETS,
   PATH_DATABASE,
   PathDefinition,
 } from './pathEngineTables';
 
 // ============================================================================
-// V2 Types & Interfaces (O*NET & Multi-Dimensional Funnel Architecture)
+// V3 Types & Interfaces (O*NET, Dual-Score & 20D MMR Multimodal Architecture)
 // ============================================================================
 
 export interface DiscPositioningResult {
@@ -38,7 +39,11 @@ export interface PathRecommendationResult {
     titleFa: string;
   };
   description: string;
-  matchScore: number; // 0 to 100
+  matchScore: number; // 0 to 100 (Core PsychometricFit)
+  marketViabilityScore?: number; // 0 to 100 (AI Risk, Demand Outlook, Remote-Friendliness)
+  strategicScore?: number; // 0 to 100 (0.70 * PsychometricFit + 0.30 * MarketViabilityScore)
+  mmrScore?: number; // 0 to 1 (Maximal Marginal Relevance score for complementary diversity)
+  enterpriseInsight?: EnterpriseLaborInsight;
   metrics: {
     hollandFit: number; // 0 to 100 (Cosine similarity percentage)
     gardnerFit: number; // 0 to 100 (Cognitive suitability)
@@ -48,6 +53,7 @@ export interface PathRecommendationResult {
   educationalRoadmap: {
     highSchoolTrack: string;
     universityMajors: string[];
+    keyCertifications?: string[];
   };
   compatibilityReasoning: {
     hollandWhy: string;
@@ -60,6 +66,11 @@ export interface PathRecommendationResult {
 export interface PathEngineOutputV2 {
   completenessWarning: string | null;
   completedTestsCount: number;
+  adaptiveWeightsUsed?: {
+    holland: number;
+    gardner: number;
+    mbti: number;
+  };
   userSummary: {
     hollandCode: string;
     topIntelligences: string[];
@@ -75,7 +86,7 @@ export interface PathEngineOutputV2 {
   basket: {
     mainPath: PathRecommendationResult;
     alternativePaths: PathRecommendationResult[]; // Top same-cluster matches
-    complementaryPaths: PathRecommendationResult[]; // Top cross-cluster / interdisciplinary matches
+    complementaryPaths: PathRecommendationResult[]; // Top cross-cluster / interdisciplinary matches (MMR-selected)
   };
   allPathsRanked: PathRecommendationResult[];
   computedAt: string;
@@ -318,6 +329,172 @@ export function calculateMbtiFit(
   return { fitScore, axisBreakdown: breakdown };
 }
 
+// ============================================================================
+// V3 Adaptive Weighting & 20D Multimodal Vector Operations
+// ============================================================================
+
+export interface AdaptiveWeights {
+  holland: number;
+  gardner: number;
+  mbti: number;
+}
+
+/**
+ * Dynamically computes reliability weights (Confidence-Weighted Priors):
+ * Holland: alpha_H = max(0.4, (Score_max - Score_min) / 100)
+ * Gardner: alpha_G = max(0.4, min(1.0, variance / 1.5))
+ * MBTI:    alpha_M = max(0.3, avg(Intensity_a / 100))
+ * Re-normalizes over base weights [0.35, 0.35, 0.30]
+ */
+export function calculateAdaptiveWeights(
+  holland: HollandResult | null,
+  gardner: GardnerResult | null,
+  mbti: MbtiResult | null
+): AdaptiveWeights {
+  const baseWeights = { holland: 0.35, gardner: 0.35, mbti: 0.30 };
+
+  // Holland confidence factor (differentiation index)
+  let alphaH = 0.5;
+  if (holland && (holland.normalizedScores || holland.scores)) {
+    const scores = Object.values(holland.normalizedScores || holland.scores || {});
+    if (scores.length > 0) {
+      const maxScore = Math.max(...scores);
+      const minScore = Math.min(...scores);
+      alphaH = Math.max(0.4, Math.min(1.0, (maxScore - minScore) / 100));
+    }
+  }
+
+  // Gardner confidence factor (variance between 8 intelligences)
+  let alphaG = 0.5;
+  const userGardnerScores = gardner?.allScores || gardner?.scores;
+  if (userGardnerScores) {
+    const gVals = Object.values(userGardnerScores);
+    if (gVals.length > 1) {
+      const mean = gVals.reduce((a, b) => a + b, 0) / gVals.length;
+      const variance = gVals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / gVals.length;
+      alphaG = Math.max(0.4, Math.min(1.0, variance / 1.5));
+    }
+  }
+
+  // MBTI confidence factor (average intensity across axes)
+  let alphaM = 0.5;
+  if (mbti) {
+    if (mbti.certaintyScores) {
+      const intensities = Object.values(mbti.certaintyScores).map((cs) => cs.intensityPct || 0);
+      if (intensities.length > 0) {
+        const avgIntensity = intensities.reduce((a, b) => a + b, 0) / intensities.length;
+        alphaM = Math.max(0.3, Math.min(1.0, avgIntensity / 100));
+      }
+    } else if (mbti.certainty) {
+      const cVals = Object.values(mbti.certainty);
+      if (cVals.length > 0) {
+        const avgC = cVals.reduce((a, b) => a + b, 0) / cVals.length;
+        alphaM = Math.max(0.3, Math.min(1.0, avgC / 100));
+      }
+    }
+  }
+
+  // Re-normalize dynamic weights
+  const rawH = baseWeights.holland * alphaH;
+  const rawG = baseWeights.gardner * alphaG;
+  const rawM = baseWeights.mbti * alphaM;
+  const sumRaw = rawH + rawG + rawM;
+
+  return {
+    holland: Number((rawH / sumRaw).toFixed(4)),
+    gardner: Number((rawG / sumRaw).toFixed(4)),
+    mbti: Number((rawM / sumRaw).toFixed(4)),
+  };
+}
+
+/**
+ * Builds a unit-length 20-dimensional Multimodal Job Embedding:
+ * Block 1: 0.45 * RIASEC (6D in [0, 1])
+ * Block 2: 0.35 * Gardner (8D in [0, 1])
+ * Block 3: 0.20 * WorkEnvironment (6D in [0, 1])
+ * Resulting vector is L2-normalized so dot-product equals exact cosine similarity in O(1).
+ */
+export function build20DJobEmbedding(job: CareerEntity): number[] {
+  // 1. RIASEC 6D
+  const riasecKeys: (keyof RiasecVector)[] = ['R', 'I', 'A', 'S', 'E', 'C'];
+  const block1 = riasecKeys.map((k) => 0.45 * ((job.riasecVector[k] || 0) / 100));
+
+  // 2. Gardner 8D
+  const gardnerKeys: (keyof GardnerVector)[] = [
+    'logical',
+    'spatial',
+    'linguistic',
+    'interpersonal',
+    'intrapersonal',
+    'bodily',
+    'musical',
+    'naturalistic',
+  ];
+  const block2 = gardnerKeys.map((k) => 0.35 * (job.gardnerWeights[k] || 0));
+
+  // 3. WorkEnvironment 6D
+  const envKeys: (keyof JobWorkEnvironmentVector)[] = [
+    'structure',
+    'social',
+    'autonomy',
+    'pace',
+    'analytical_vs_valuebased',
+    'competitiveness',
+  ];
+  const block3 = envKeys.map((k) => 0.20 * ((job.workEnvironment[k] || 0) / 100));
+
+  const raw20D = [...block1, ...block2, ...block3];
+
+  // L2 Unit Normalization
+  const normSq = raw20D.reduce((sum, val) => sum + val * val, 0);
+  const norm = Math.sqrt(normSq);
+  if (norm === 0 || !Number.isFinite(norm)) {
+    return raw20D;
+  }
+  return raw20D.map((v) => v / norm);
+}
+
+/**
+ * Fast O(1) Cosine Similarity between two L2-normalized 20D job embeddings
+ */
+export function calculate20DDotProduct(v1: number[], v2: number[]): number {
+  let dot = 0;
+  const len = Math.min(v1.length, v2.length, 20);
+  for (let i = 0; i < len; i++) {
+    dot += v1[i] * v2[i];
+  }
+  return Math.max(0.0, Math.min(1.0, dot));
+}
+
+/**
+ * Calculates Market Viability Score:
+ * MarketViabilityScore = round(0.40 * (100 - AutomationRisk) + 0.35 * DemandScore + 0.25 * RemoteScore)
+ */
+export function calculateMarketViabilityScore(insight?: EnterpriseLaborInsight): number {
+  if (!insight) return 75; // Default neutral viability
+
+  const demandMap: Record<string, number> = {
+    rising: 95,
+    stable: 75,
+    declining: 40,
+  };
+  const demandScore = demandMap[insight.demandOutlook] || 75;
+  const remoteScore = Math.max(0, Math.min(100, insight.remoteCompatibilityPercent ?? 60));
+  const autoRisk = Math.max(0, Math.min(100, insight.automationRiskPercent ?? 35));
+
+  const rawViability = 0.40 * (100 - autoRisk) + 0.35 * demandScore + 0.25 * remoteScore;
+  return Math.round(Math.max(10, Math.min(100, rawViability)));
+}
+
+/**
+ * Calculates Strategic Score (V3):
+ * StrategicScore = round(0.70 * PsychometricFit + 0.30 * MarketViabilityScore)
+ */
+export function calculateStrategicScore(psychometricFit: number, marketViability: number): number {
+  const combined = 0.70 * psychometricFit + 0.30 * marketViability;
+  return Math.round(Math.max(10, Math.min(100, combined)));
+}
+
 /**
  * Extracts DISC Behavioral Role Positioning inside the career
  */
@@ -345,7 +522,7 @@ export function extractDiscPositioning(
 }
 
 // ============================================================================
-// Main Path Engine V2 Pipeline
+// Main Path Engine V3 Pipeline
 // ============================================================================
 
 export function runPathEngineV2(
@@ -364,7 +541,10 @@ export function runPathEngineV2(
     C: holland?.normalizedScores?.C ?? holland?.scores?.C ?? 50,
   };
 
-  // 2. Compute Top 3 Career Clusters Affinity
+  // 2. Compute Adaptive Weights based on user certainty/differentiation
+  const adaptiveWeights = calculateAdaptiveWeights(holland, gardner, mbti);
+
+  // 3. Compute Top 3 Career Clusters Affinity
   const clusterAffinities = Object.values(ONET_CAREER_CLUSTERS).map((cl) => {
     const sim = calculateCosineSimilarity(userRiasec, cl.typicalRiasec);
     return {
@@ -379,7 +559,13 @@ export function runPathEngineV2(
   clusterAffinities.sort((a, b) => b.affinityScore - a.affinityScore);
   const top3Clusters = clusterAffinities.slice(0, 3);
 
-  // 3. Process each career entity through the 4-phase psychometric funnel
+  // Precompute 20D embeddings for fast O(1) MMR diversity calculations
+  const embeddingMap = new Map<string, number[]>();
+  ONET_CAREER_DATABASE.forEach((job) => {
+    embeddingMap.set(job.id, build20DJobEmbedding(job));
+  });
+
+  // 4. Process each career entity through the psychometric funnel & labor market insight
   const evaluatedCareers: PathRecommendationResult[] = ONET_CAREER_DATABASE.map((job) => {
     // Phase 1: Holland Cosine Sim
     const hollandSim = calculateCosineSimilarity(userRiasec, job.riasecVector);
@@ -396,10 +582,16 @@ export function runPathEngineV2(
     // Phase 4: DISC Role Positioning
     const discPos = extractDiscPositioning(disc, job.discRoles);
 
-    // Composite MatchScore Calculation with Defensive Clamping:
-    // MatchScore = Math.round(Math.max(0.0, Math.min(1.0, (Holland * 0.35) + (Gardner * 0.35) + (MBTI * 0.30))) * 100)
-    const compositeScore = (hollandSim * 0.35) + (gardnerEval.fitScore * 0.35) + (mbtiEval.fitScore * 0.30);
+    // Dual-Score: Core PsychometricFit with Adaptive Dynamic Weights
+    const compositeScore =
+      hollandSim * adaptiveWeights.holland +
+      gardnerEval.fitScore * adaptiveWeights.gardner +
+      mbtiEval.fitScore * adaptiveWeights.mbti;
     const matchScore = Math.round(Math.max(0.0, Math.min(1.0, compositeScore)) * 100);
+
+    // Dual-Score: Market Viability & Strategic Composite Score (V3)
+    const marketViability = calculateMarketViabilityScore(job.enterpriseInsight);
+    const strategicScore = calculateStrategicScore(matchScore, marketViability);
 
     // Reasoning texts
     const hollandWhy = `هم‌پوشانی رغبتی ${hollandFitPct}٪ بر اساس تطابق بردار RIASEC با کلاستر ${job.clusterTitleFa}.`;
@@ -418,6 +610,9 @@ export function runPathEngineV2(
       },
       description: job.descriptionFa,
       matchScore,
+      marketViabilityScore: marketViability,
+      strategicScore,
+      enterpriseInsight: job.enterpriseInsight,
       metrics: {
         hollandFit: hollandFitPct,
         gardnerFit: gardnerFitPct,
@@ -427,6 +622,7 @@ export function runPathEngineV2(
       educationalRoadmap: {
         highSchoolTrack: job.educationalTracks.highSchoolTrackSuggestions.join(' یا '),
         universityMajors: job.educationalTracks.universityMajors,
+        keyCertifications: job.enterpriseInsight?.keyCertifications,
       },
       compatibilityReasoning: {
         hollandWhy,
@@ -437,15 +633,15 @@ export function runPathEngineV2(
     };
   });
 
-  // Sort all careers descending by matchScore
+  // Sort all careers descending by matchScore (PsychometricFit)
   evaluatedCareers.sort((a, b) => b.matchScore - a.matchScore);
 
-  // 4. Assemble 7-Path Basket
-  // 4.1 Main Path: Top #1 overall
+  // 5. Assemble 7-Path Basket
+  // 5.1 Main Path: Top #1 overall
   const mainPath = evaluatedCareers[0] || evaluatedCareers[0];
   const mainClusterId = mainPath.cluster.id;
 
-  // 4.2 Alternative Paths (3): Top matches in the SAME cluster (or same primary RIASEC family if needed)
+  // 5.2 Alternative Paths (3): Top matches in the SAME cluster (or same primary RIASEC family if needed)
   let sameClusterCandidates = evaluatedCareers.filter(
     (c) => c.jobId !== mainPath.jobId && c.cluster.id === mainClusterId
   );
@@ -457,22 +653,58 @@ export function runPathEngineV2(
   }
   const alternativePaths = sameClusterCandidates.slice(0, 3);
 
-  // 4.3 Complementary Paths (3): Strictly 3 MUTUALLY EXCLUSIVE clusters (none from mainClusterId, none repeated)
+  // 5.3 Complementary Paths (3): Vector-based Maximal Marginal Relevance (MMR) with lambda = 0.65
+  // in 20D Multimodal space, enforcing 3 strictly distinct clusters outside mainClusterId
   const usedJobIds = new Set([mainPath.jobId, ...alternativePaths.map((a) => a.jobId)]);
   const usedClusterIds = new Set([mainClusterId]);
-  const complementaryPaths: PathRecommendationResult[] = [];
+  const selectedBasket20D = [
+    embeddingMap.get(mainPath.jobId) || [],
+    ...alternativePaths.map((a) => embeddingMap.get(a.jobId) || []),
+  ];
 
-  // Pass 1: Strict Unique Cluster Selection (1 top job per distinct cluster)
-  for (const candidate of evaluatedCareers) {
-    if (complementaryPaths.length >= 3) break;
-    if (!usedJobIds.has(candidate.jobId) && !usedClusterIds.has(candidate.cluster.id)) {
-      complementaryPaths.push(candidate);
-      usedJobIds.add(candidate.jobId);
-      usedClusterIds.add(candidate.cluster.id);
+  const complementaryPaths: PathRecommendationResult[] = [];
+  const lambdaMMR = 0.65;
+
+  // MMR Iterative Selection for 3 Complementary Paths
+  for (let step = 0; step < 3; step++) {
+    let bestCandidate: PathRecommendationResult | null = null;
+    let bestMMR = -Infinity;
+
+    for (const candidate of evaluatedCareers) {
+      if (usedJobIds.has(candidate.jobId) || usedClusterIds.has(candidate.cluster.id)) {
+        continue;
+      }
+
+      const candVec = embeddingMap.get(candidate.jobId) || [];
+      // Calculate max similarity to any already-selected path in the basket
+      let maxSim = 0;
+      for (const selectedVec of selectedBasket20D) {
+        const sim = calculate20DDotProduct(candVec, selectedVec);
+        if (sim > maxSim) maxSim = sim;
+      }
+
+      // MMR Score: balance between relevance (matchScore) and diversity (1 - maxSim)
+      const relevance = candidate.matchScore / 100;
+      const mmrScore = lambdaMMR * relevance - (1 - lambdaMMR) * maxSim;
+
+      if (mmrScore > bestMMR) {
+        bestMMR = mmrScore;
+        bestCandidate = candidate;
+      }
+    }
+
+    if (bestCandidate) {
+      bestCandidate.mmrScore = Number(bestMMR.toFixed(3));
+      complementaryPaths.push(bestCandidate);
+      usedJobIds.add(bestCandidate.jobId);
+      usedClusterIds.add(bestCandidate.cluster.id);
+      selectedBasket20D.push(embeddingMap.get(bestCandidate.jobId) || []);
+    } else {
+      break;
     }
   }
 
-  // Pass 2 (Graceful fallback if database has fewer than 4 total clusters):
+  // Graceful Fallback Pass (if candidates with unique clusters are exhausted)
   if (complementaryPaths.length < 3) {
     for (const candidate of evaluatedCareers) {
       if (complementaryPaths.length >= 3) break;
@@ -498,6 +730,7 @@ export function runPathEngineV2(
   return {
     completenessWarning,
     completedTestsCount,
+    adaptiveWeightsUsed: adaptiveWeights,
     userSummary: {
       hollandCode: holland?.code || 'RIA',
       topIntelligences: gardner?.topIntelligences || ['logical', 'spatial', 'linguistic'],
